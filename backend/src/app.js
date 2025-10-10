@@ -1,12 +1,17 @@
-import express from "express";
-import connectDB from "./config/connection.js";    
-import userRouter from "./routes/user.routes.js";
+import cors from 'cors';
+import mongoose from 'mongoose';
+import express from 'express';
 
-const initAPP = async (app) => {
-  await connectDB();
+const initAPP = (app) => {
   app.use(express.json());
-  app.use("/users", userRouter);
-  app.get("/", (req, res) => res.send("✅ Lost Treasures Backend Running"));
+  app.use(cors());
+
+  mongoose.connect('mongodb://localhost:27017/softDB', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log('✅ DB connection established'))
+  .catch(err => console.log('❌ DB connection error:', err));
 };
 
 export default initAPP;

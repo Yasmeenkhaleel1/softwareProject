@@ -3,12 +3,10 @@ import initAPP from './app.js';
 import userModel from './models/user/user.model.js';
 
 const app = express();
-const port = process.env.PORT || 4000;
+const port = process.env.PORT || 5000;
 
-// تهيئة التطبيق (اتصال DB + Routes)
 initAPP(app);
 
-// مثال على Endpoint بسيط لجلب المستخدمين
 app.get('/users', async (req, res) => {
   try {
     const users = await userModel.find();

@@ -1,30 +1,34 @@
 import 'package:flutter/material.dart';
 
-class LandingPage extends StatelessWidget {
+class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
+
+  @override
+  State<LandingPage> createState() => _LandingPageState();
+}
+
+class _LandingPageState extends State<LandingPage> {
+  bool isLoggedIn = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 🔸 الخلفية باللون البرتقالي الفاتح
       backgroundColor: const Color(0xFFFFE5B4),
       appBar: AppBar(
-        // 🟩 الشريط العلوي باللون الأخضر
         backgroundColor: const Color(0xFF5BB19F),
         elevation: 0,
+        titleSpacing: 10,
         title: Row(
           children: [
-            Image.asset(
-              'assets/images/treasure_icon.png', // logo
-              height: 30,
-            ),
-            const SizedBox(width: 8),
+            Image.asset('assets/images/treasure_icon.png', height: 26),
+            const SizedBox(width: 6),
             const Text(
-              "LOST TREASURES",
+              "Lost Treasures",
               style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  fontSize: 18,
+                  letterSpacing: 1.2),
             ),
           ],
         ),
@@ -45,7 +49,35 @@ class LandingPage extends StatelessWidget {
             onPressed: () {},
             child: const Text("Contact", style: TextStyle(color: Colors.white)),
           ),
-          const SizedBox(width: 20),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.account_circle, color: Colors.black, size: 28),
+            color: Colors.white,
+            onSelected: (value) {
+              if (value == 'login') {
+                Navigator.pushNamed(context, '/login');
+              } else if (value == 'signup') {
+                Navigator.pushNamed(context, '/signup');
+              } else if (value == 'profile') {
+                // لاحقاً صفحة profile
+              } else if (value == 'logout') {
+                setState(() => isLoggedIn = false);
+              }
+            },
+            itemBuilder: (context) {
+              if (!isLoggedIn) {
+                return [
+                  const PopupMenuItem(value: 'login', child: Text('Log In')),
+                  const PopupMenuItem(value: 'signup', child: Text('Sign Up')),
+                ];
+              } else {
+                return [
+                  const PopupMenuItem(value: 'profile', child: Text('Profile')),
+                  const PopupMenuItem(value: 'logout', child: Text('Log Out')),
+                ];
+              }
+            },
+          ),
+          const SizedBox(width: 10),
         ],
       ),
       body: SingleChildScrollView(
@@ -58,7 +90,7 @@ class LandingPage extends StatelessWidget {
                   "DISCOVER THE HIDDEN HUMAN TREASURES AROUND YOU",
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF1E2A38),
                   ),
@@ -67,10 +99,7 @@ class LandingPage extends StatelessWidget {
                 const Text(
                   "Connecting skilled and experienced individuals with those who seek their expertise.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.black54,
-                  ),
+                  style: TextStyle(fontSize: 17, color: Colors.black54),
                 ),
                 const SizedBox(height: 40),
                 Wrap(
@@ -82,75 +111,41 @@ class LandingPage extends StatelessWidget {
                       onPressed: () {},
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFF5D491),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 28, vertical: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                       ),
                       child: const Text(
                         "Explore Experts",
                         style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black,
-                          fontWeight: FontWeight.w600,
-                        ),
+                            fontSize: 15, color: Colors.black, fontWeight: FontWeight.w600),
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/login');
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF3C82F6),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 28, vertical: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                       ),
                       child: const Text(
                         "Log In",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/signup');
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1E3A8A),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 28, vertical: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                       ),
                       child: const Text(
                         "Sign Up",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 50),
-
-                // 🌟 الصورة مع إشعاع أخضر ناعم وزوايا دائرية
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(25),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF5BB19F)
-                            .withOpacity(0.5), // الإشعاع الأخضر الفاتح
-                        blurRadius: 40,
-                        spreadRadius: 8,
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(25),
-                    child: Image.asset(
-                      'assets/images/experts.png',
-                      width: MediaQuery.of(context).size.width * 0.8,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
                 ),
               ],
             ),
