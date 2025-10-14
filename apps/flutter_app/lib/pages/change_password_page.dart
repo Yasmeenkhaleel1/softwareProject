@@ -27,7 +27,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       await ApiService.logout();
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
+        MaterialPageRoute(builder: (_) =>  LoginPage(onLoginSuccess: () {  },)),
       );
     }
   }

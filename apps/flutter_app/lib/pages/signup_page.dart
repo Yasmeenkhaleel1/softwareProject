@@ -21,7 +21,6 @@ class _SignupPageState extends State<SignupPage> {
   String gender = "";
   int? age;
   String role = "student"; // default
-
   bool isLoading = false;
 
   Future<void> signupUser() async {
@@ -51,7 +50,6 @@ class _SignupPageState extends State<SignupPage> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201) {
-        // ✅ Save JWT token locally
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', data['token']);
 
@@ -59,7 +57,6 @@ class _SignupPageState extends State<SignupPage> {
           SnackBar(content: Text(data['message'] ?? "Signup successful!")),
         );
 
-        // ✅ Navigate to home (or login)
         Navigator.pushReplacementNamed(context, '/home');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -89,24 +86,48 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
+  Widget _buildTextField({
+    required IconData icon,
+    required String label,
+    bool obscure = false,
+    TextInputType keyboardType = TextInputType.text,
+    required Function(String) onChanged,
+    String? Function(String?)? validator,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextFormField(
+        obscureText: obscure,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: Colors.grey[700]),
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        onChanged: onChanged,
+        validator: validator,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF6E9),
-      appBar: CustomAppBar(
-        isLoggedIn: false,
-        onMenuSelected: handleMenuSelection,
-      ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 50),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const Icon(Icons.person_add, size: 80, color: Color(0xFF007AFF)),
+              const SizedBox(height: 20),
               const Text(
                 "Create Account",
                 style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 26,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF007AFF)),
               ),
@@ -147,10 +168,23 @@ class _SignupPageState extends State<SignupPage> {
                       validator: (v) =>
                           v!.isEmpty ? "Please confirm your password" : null,
                     ),
-                    _buildTextField(
-                      icon: Icons.person,
-                      label: "Gender (Optional)",
-                      onChanged: (v) => gender = v,
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: gender.isNotEmpty ? gender : null,
+                      decoration: InputDecoration(
+                        labelText: "Gender",
+                        prefixIcon:
+                            const Icon(Icons.person, color: Colors.grey),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: "male", child: Text("Male")),
+                        DropdownMenuItem(value: "female", child: Text("Female")),
+                        DropdownMenuItem(value: "other", child: Text("Other")),
+                      ],
+                      onChanged: (v) => setState(() => gender = v ?? ""),
                     ),
                     _buildTextField(
                       icon: Icons.cake_outlined,
@@ -158,27 +192,7 @@ class _SignupPageState extends State<SignupPage> {
                       keyboardType: TextInputType.number,
                       onChanged: (v) => age = int.tryParse(v),
                     ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: role,
-                      decoration: InputDecoration(
-                        labelText: "Role",
-                        prefixIcon:
-                            const Icon(Icons.work_outline, color: Colors.grey),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                            value: "student", child: Text("Customer")),
-                        DropdownMenuItem(
-                            value: "service_center", child: Text("Specialist")),
-                        DropdownMenuItem(value: "admin", child: Text("Admin")),
-                      ],
-                      onChanged: (v) => setState(() => role = v!),
-                    ),
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -197,16 +211,13 @@ class _SignupPageState extends State<SignupPage> {
                                 }
                               },
                         child: isLoading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white,
-                              )
+                            ? const CircularProgressIndicator(color: Colors.white)
                             : const Text(
                                 "Sign Up",
                                 style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16),
                               ),
                       ),
                     ),
@@ -220,10 +231,8 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    const Text(
-                      "Or sign up using",
-                      style: TextStyle(color: Colors.black54),
-                    ),
+                    const Text("Or sign up using",
+                        style: TextStyle(color: Colors.black54)),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -240,32 +249,6 @@ class _SignupPageState extends State<SignupPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required IconData icon,
-    required String label,
-    bool obscure = false,
-    TextInputType keyboardType = TextInputType.text,
-    required Function(String) onChanged,
-    String? Function(String?)? validator,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextFormField(
-        obscureText: obscure,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.grey[700]),
-          labelText: label,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        onChanged: onChanged,
-        validator: validator,
       ),
     );
   }

@@ -3,19 +3,52 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'pages/landing_page.dart';
 import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
+import 'pages/change_password_page.dart';
 
-void main() => runApp(const LostTreasuresApp());
 
-class LostTreasuresApp extends StatelessWidget {
+void main() {
+  runApp(const LostTreasuresApp());
+}
+
+class LostTreasuresApp extends StatefulWidget {
   const LostTreasuresApp({super.key});
 
-  Future<bool> checkLoginStatus() async {
+  @override
+  State<LostTreasuresApp> createState() => _LostTreasuresAppState();
+}
+
+class _LostTreasuresAppState extends State<LostTreasuresApp> {
+  bool _isLoggedIn = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token') != null;
+    setState(() {
+      _isLoggedIn = prefs.getString('token') != null;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('token');
+    setState(() => _isLoggedIn = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const MaterialApp(
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Lost Treasures',
@@ -26,22 +59,22 @@ class LostTreasuresApp extends StatelessWidget {
           secondary: const Color(0xFF62C6D9),
         ),
       ),
-      home: FutureBuilder<bool>(
-        future: checkLoginStatus(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
-          // Go directly to Landing if token exists
-          return snapshot.data! ? LandingPage(isLoggedIn: false, onLogout: () {  }) : const LoginPage();
-        },
+      home: LandingPage(
+        isLoggedIn: _isLoggedIn,
+        onLogout: _logout,
       ),
       routes: {
-        '/login': (context) => const LoginPage(),
+        '/login': (context) => LoginPage(
+              onLoginSuccess: () {
+                setState(() => _isLoggedIn = true);
+              },
+            ),
         '/signup': (context) => const SignupPage(),
-        '/landing': (context) => LandingPage(isLoggedIn: false, onLogout: () {  },),
+        '/landing': (context) => LandingPage(
+              isLoggedIn: _isLoggedIn,
+              onLogout: _logout,
+            ),
+             '/change-password': (context) => const ChangePasswordPage(),
       },
     );
   }

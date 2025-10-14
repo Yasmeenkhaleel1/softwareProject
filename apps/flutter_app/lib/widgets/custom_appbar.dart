@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app/pages/profile_page.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isLoggedIn;
