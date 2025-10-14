@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import bcrypt from 'bcryptjs';
 import userModel from '../models/user/user.model.js';
 
 const router = express.Router();
@@ -13,7 +14,8 @@ router.post('/signup', async (req, res) => {
     const existingUser = await userModel.findOne({ email });
     if (existingUser) return res.status(400).json({ message: 'Email already exists' });
 
-    const newUser = new userModel({ name, email, password, age, gender, role });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new userModel({ name, email, password: hashedPassword, age, gender, role });
     await newUser.save();
 
     res.status(201).json({ message: 'User registered successfully' });

@@ -1,84 +1,64 @@
 import 'package:flutter/material.dart';
+import '../widgets/custom_appbar.dart';
+import 'profile_page.dart';
 
 class LandingPage extends StatefulWidget {
-  const LandingPage({super.key});
+  final bool isLoggedIn;
+  final void Function() onLogout;
+  final String? userRole;
+  final String? userId;
+
+  const LandingPage({
+    super.key,
+    required this.isLoggedIn,
+    required this.onLogout,
+    this.userRole,
+    this.userId,
+  });
 
   @override
   State<LandingPage> createState() => _LandingPageState();
 }
 
 class _LandingPageState extends State<LandingPage> {
-  bool isLoggedIn = false;
+  void handleMenuSelection(String value) {
+    switch (value) {
+      case 'login':
+        Navigator.pushNamed(context, '/login');
+        break;
+      case 'signup':
+        Navigator.pushNamed(context, '/signup');
+        break;
+      case 'profile':
+        if (widget.userRole == 'customer') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProfilePage(userId: widget.userId ?? ''),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("This role has no profile page yet.")),
+          );
+        }
+        break;
+      case 'logout':
+        widget.onLogout();
+        break;
+      case 'home':
+        Navigator.pushNamed(context, '/');
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFE5B4),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF5BB19F),
-        elevation: 0,
-        titleSpacing: 10,
-        title: Row(
-          children: [
-            Image.asset('assets/images/treasure_icon.png', height: 26),
-            const SizedBox(width: 6),
-            const Text(
-              "Lost Treasures",
-              style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  fontSize: 18,
-                  letterSpacing: 1.2),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {},
-            child: const Text("Home", style: TextStyle(color: Colors.white)),
-          ),
-          TextButton(
-            onPressed: () {},
-            child: const Text("About", style: TextStyle(color: Colors.white)),
-          ),
-          TextButton(
-            onPressed: () {},
-            child: const Text("Services", style: TextStyle(color: Colors.white)),
-          ),
-          TextButton(
-            onPressed: () {},
-            child: const Text("Contact", style: TextStyle(color: Colors.white)),
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.account_circle, color: Colors.black, size: 28),
-            color: Colors.white,
-            onSelected: (value) {
-              if (value == 'login') {
-                Navigator.pushNamed(context, '/login');
-              } else if (value == 'signup') {
-                Navigator.pushNamed(context, '/signup');
-              } else if (value == 'profile') {
-                // لاحقاً صفحة profile
-              } else if (value == 'logout') {
-                setState(() => isLoggedIn = false);
-              }
-            },
-            itemBuilder: (context) {
-              if (!isLoggedIn) {
-                return [
-                  const PopupMenuItem(value: 'login', child: Text('Log In')),
-                  const PopupMenuItem(value: 'signup', child: Text('Sign Up')),
-                ];
-              } else {
-                return [
-                  const PopupMenuItem(value: 'profile', child: Text('Profile')),
-                  const PopupMenuItem(value: 'logout', child: Text('Log Out')),
-                ];
-              }
-            },
-          ),
-          const SizedBox(width: 10),
-        ],
+      appBar: CustomAppBar(
+        isLoggedIn: widget.isLoggedIn,
+        onMenuSelected: handleMenuSelection,
       ),
       body: SingleChildScrollView(
         child: Center(
@@ -102,51 +82,69 @@ class _LandingPageState extends State<LandingPage> {
                   style: TextStyle(fontSize: 17, color: Colors.black54),
                 ),
                 const SizedBox(height: 40),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 15,
-                  runSpacing: 10,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {},
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF5D491),
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                if (!widget.isLoggedIn)
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 15,
+                    runSpacing: 10,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/login');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3C82F6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 14,
+                          ),
+                        ),
+                        child: const Text(
+                          "Log In",
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                      child: const Text(
-                        "Explore Experts",
-                        style: TextStyle(
-                            fontSize: 15, color: Colors.black, fontWeight: FontWeight.w600),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/signup');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E3A8A),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 14,
+                          ),
+                        ),
+                        child: const Text(
+                          "Sign Up",
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  ElevatedButton(
+                    onPressed: () => handleMenuSelection('profile'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 14,
                       ),
                     ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/login');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3C82F6),
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                      ),
-                      child: const Text(
-                        "Log In",
-                        style: TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w600),
-                      ),
+                    child: const Text(
+                      "Go to Profile",
+                      style: TextStyle(color: Colors.white),
                     ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/signup');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E3A8A),
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                      ),
-                      child: const Text(
-                        "Sign Up",
-                        style: TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
               ],
             ),
           ),

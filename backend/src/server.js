@@ -1,12 +1,20 @@
-import express from 'express';
-import initAPP from './app.js';
-import userRouter from './routes/user.routes.js';
+import express from "express";
+import cors from "cors";
+import connectDB from "./config/db.js";
+import userRoutes from "./routes/user.routes.js";
+import authRoutes from "./routes/auth.route.js";
 
 const app = express();
-const port = process.env.PORT || 5000;
+const PORT = 5000;
 
-initAPP(app);
+app.use(cors());
+app.use(express.json());
 
-app.use('/api', userRouter);
+// Connect to DB
+connectDB();
 
-app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
+// Routes
+app.use("/api", userRoutes);
+app.use("/api", authRoutes);
+
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
