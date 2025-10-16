@@ -1,12 +1,12 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../widgets/custom_appbar.dart';
-import 'landing_page.dart';
+import 'package:provider/provider.dart';
+import '../api/api_service.dart';
+import '../models/auth_state.dart';
+import 'signup_page.dart'; // للتنقل إلى صفحة التسجيل
+import 'dashboard_page.dart'; // للتنقل بعد تسجيل الدخول الناجح
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, required Null Function() onLoginSuccess});
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -14,198 +14,166 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  String email = "";
-  String password = "";
-  bool isLoading = false;
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  Future<void> loginUser() async {
-    if (!_formKey.currentState!.validate()) return;
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-    setState(() => isLoading = true);
-
-    try {
-      final response = await http.post(
-        Uri.parse('http://localhost:5000/api/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({"email": email, "password": password}),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['token'] != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', data['token']);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Login successful!")),
+  // 🚀 وظيفة تسجيل الدخول الفعلية
+  void _login() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+      
+      try {
+        // 📞 استدعاء API الدخول
+        final res = await ApiService.login(
+          _emailController.text, 
+          _passwordController.text,
         );
+        
+        if (res['token'] != null) {
+          // 🔑 الدخول ناجح: تحديث حالة المصادقة
+          final token = res['token'];
+          // نفترض أن جسم الاستجابة يحتوي على دور المستخدم تحت مفتاح 'user'
+          final role = res['user']['role']; 
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => LandingPage(
-              isLoggedIn: true,
-              onLogout: () async {
-                await prefs.remove('token');
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => LoginPage(onLoginSuccess: () {})),
-                );
-              },
-              userRole: data['user']['role'],
-              userId: data['user']['_id'],
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? "Login failed")),
-        );
+          // استخدام Provider لتحديث حالة التطبيق
+          Provider.of<AuthState>(context, listen: false).login(token, role); 
+          
+          _showSnackBar('Login successful!', Colors.green);
+
+          // الانتقال إلى لوحة التحكم (Dashboard) ومسح جميع الصفحات السابقة
+          Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (route) => false); 
+        } else {
+          // فشل الدخول
+          final message = res['message'] ?? 'Login failed. Check your credentials.';
+          _showSnackBar(message, Colors.red);
+        }
+      } catch (e) {
+        // خطأ في الاتصال بالخادم
+        _showSnackBar('An error occurred. Check server connection or address.', Colors.red);
+        print('Login Error: $e');
+      } finally {
+        setState(() => _isLoading = false);
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    } finally {
-      setState(() => isLoading = false);
     }
   }
 
-  void handleMenuSelection(String value) {
-    switch (value) {
-      case 'signup':
-        Navigator.pushNamed(context, '/signup');
-        break;
-      case 'home':
-        Navigator.pushNamed(context, '/');
-        break;
-    }
-  }
-
-  Widget _buildTextField({
-    required IconData icon,
-    required String label,
-    bool obscure = false,
-    TextInputType keyboardType = TextInputType.text,
-    required Function(String) onChanged,
-    String? Function(String?)? validator,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextFormField(
-        obscureText: obscure,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.grey[700]),
-          labelText: label,
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        onChanged: onChanged,
-        validator: validator,
-      ),
+  // 💬 وظيفة لإظهار رسائل التنبيه
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    // تحديد عرض الحاوية للويب/الديسكتوب
+    final bool isWeb = MediaQuery.of(context).size.width > 600;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFEFFAFB),
+      appBar: AppBar(
+        title: const Text('Log In'),
+        backgroundColor: const Color(0xFF62C6D9),
+        elevation: 0,
+      ),
       body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 50),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.lock_outline, size: 80, color: Color(0xFF62C6D9)),
-              const SizedBox(height: 20),
-              const Text(
-                "Welcome Back!",
-                style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF007AFF)),
-              ),
-              const SizedBox(height: 30),
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    _buildTextField(
-                      icon: Icons.email_outlined,
-                      label: "Email",
-                      keyboardType: TextInputType.emailAddress,
-                      onChanged: (v) => email = v,
-                      validator: (v) =>
-                          v!.isEmpty ? "Please enter your email" : null,
+        child: Container(
+          width: isWeb ? 400 : double.infinity,
+          padding: const EdgeInsets.all(32.0),
+          child: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  // 📧 حقل الإيميل
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email, color: Color(0xFF62C6D9)),
                     ),
-                    _buildTextField(
-                      icon: Icons.lock_outline,
-                      label: "Password",
-                      obscure: true,
-                      onChanged: (v) => password = v,
-                      validator: (v) =>
-                          v!.isEmpty ? "Please enter your password" : null,
+                    validator: (value) {
+                      if (value == null || !value.contains('@') || value.isEmpty) {
+                        return 'Please enter a valid email address';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 🔒 حقل كلمة المرور
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.lock, color: Color(0xFF62C6D9)),
                     ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF62C6D9),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed: isLoading ? null : loginUser,
-                        child: isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                "Login",
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    TextButton(
-                      onPressed: () => Navigator.pushNamed(context, '/signup'),
-                      child: const Text("Don't have an account? Sign Up"),
-                    ),
-                    const SizedBox(height: 10),
-                    TextButton(
+                    validator: (value) {
+                      if (value == null || value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  
+                  // 🔗 رابط نسيت كلمة المرور
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
                       onPressed: () {
-                        Navigator.pushNamed(context, '/change-password');
+                        // 🚧 يحتاج إلى صفحة 'Forgot Password' في المسارات
+                        Navigator.pushNamed(context, '/forgot-password'); 
                       },
-                      child: const Text(
-                        "Change Password",
-                        style: TextStyle(color: Colors.redAccent),
-                      ),
+                      child: const Text("Forgot Password?", style: TextStyle(color: Colors.black54)),
                     ),
-                    const SizedBox(height: 15),
-                    const Text("Or login using",
-                        style: TextStyle(color: Colors.black54)),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.facebook, color: Colors.blue, size: 28),
-                        SizedBox(width: 20),
-                        Icon(Icons.g_mobiledata,
-                            color: Colors.redAccent, size: 32),
-                      ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // ➡️ زر الدخول
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _login, // منع النقر أثناء التحميل
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF62C6D9),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                  ],
-                ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20, 
+                            height: 20, 
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                          )
+                        : const Text(
+                            'Log In', 
+                            style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)
+                          ),
+                  ),
+                  const SizedBox(height: 15),
+
+                  // 🔗 رابط للتسجيل
+                  TextButton(
+                    onPressed: () => Navigator.pushReplacementNamed(context, '/signup'),
+                    child: const Text(
+                      "Don't have an account? Sign Up", 
+                      style: TextStyle(color: Color(0xFF62C6D9), fontWeight: FontWeight.w600)
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

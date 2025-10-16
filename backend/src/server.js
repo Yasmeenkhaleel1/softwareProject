@@ -3,7 +3,8 @@ import cors from "cors";
 import connectDB from "./config/db.js";
 import userRoutes from "./routes/user.routes.js";
 import authRoutes from "./routes/auth.route.js";
-
+import dotenv from 'dotenv';
+dotenv.config({ path: './src/.env' });
 const app = express();
 const PORT = 5000;
 

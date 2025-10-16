@@ -1,255 +1,269 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../widgets/custom_appbar.dart';
+import 'package:provider/provider.dart';
+import '../api/api_service.dart'; 
+import '../models/auth_state.dart'; 
+import 'login_page.dart';
 
-class SignupPage extends StatefulWidget {
-  const SignupPage({super.key});
+class SignUpPage extends StatefulWidget {
+  const SignUpPage({super.key});
 
   @override
-  State<SignupPage> createState() => _SignupPageState();
+  State<SignUpPage> createState() => _SignUpPageState();
 }
 
-class _SignupPageState extends State<SignupPage> {
+class _SignUpPageState extends State<SignUpPage> {
   final _formKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+  
+  String? _selectedGender; 
+  String _selectedRole = 'customer'; 
+  
+  bool _isLoading = false;
+  bool _isOTPSent = false;
+  
+  final List<String> roles = ['customer', 'specialist', 'admin']; 
+  
+  // 🔑 لتخزين الإيميل الذي تم إرسال الرمز إليه
+  String _registeredEmail = ''; 
 
-  String name = "";
-  String email = "";
-  String password = "";
-  String confirmPassword = "";
-  String gender = "";
-  int? age;
-  String role = "student"; // default
-  bool isLoading = false;
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _ageController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
 
-  Future<void> signupUser() async {
-    if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Passwords do not match")),
-      );
+  void _signUp() async {
+    if (!_formKey.currentState!.validate() || _selectedGender == null) {
+      _showSnackBar('Please fill all required fields correctly.', Colors.red);
       return;
     }
 
-    setState(() => isLoading = true);
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showSnackBar('Passwords do not match.', Colors.red);
+      return;
+    }
+    
+    setState(() => _isLoading = true);
+    
+    final userData = {
+      'name': _nameController.text,
+      'email': _emailController.text,
+      'password': _passwordController.text,
+      'age': int.tryParse(_ageController.text) ?? 0,
+      'gender': _selectedGender,
+      'role': _selectedRole, 
+    };
 
     try {
-      final response = await http.post(
-        Uri.parse('http://localhost:5000/api/signup'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "name": name.trim(),
-          "email": email.trim(),
-          "password": password.trim(),
-          "age": age,
-          "gender": gender.trim(),
-          "role": role
-        }),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 201) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', data['token']);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? "Signup successful!")),
-        );
-
-        Navigator.pushReplacementNamed(context, '/home');
+      final res = await ApiService.signup(userData);
+      
+      if (res['message'].startsWith('User registered successfully')) {
+        _showSnackBar('Registration successful! Check your email for verification.', Colors.green);
+        setState(() {
+            _registeredEmail = _emailController.text; // 🔑 حفظ الإيميل
+            _isOTPSent = true; 
+        });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['message'] ?? "Signup failed")),
-        );
+        _showSnackBar(res['message'] ?? 'Registration failed', Colors.red);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      _showSnackBar('An error occurred. Check server connection or address.', Colors.red);
     } finally {
-      setState(() => isLoading = false);
+      setState(() => _isLoading = false);
     }
   }
 
-  void handleMenuSelection(String value) {
-    switch (value) {
-      case 'login':
-        Navigator.pushNamed(context, '/login');
-        break;
-      case 'signup':
-        Navigator.pushNamed(context, '/signup');
-        break;
-      case 'home':
-        Navigator.pushNamed(context, '/');
-        break;
+  void _verifyOTP() async {
+    if (_otpController.text.length != 6) {
+        _showSnackBar('Please enter a 6-digit code.', Colors.red);
+        return;
+    }
+    
+    setState(() => _isLoading = true);
+
+    try {
+        final res = await ApiService.verifyOTP(_registeredEmail, _otpController.text);
+
+        if (res['token'] != null) {
+            // التحقق ناجح: تسجيل الدخول التلقائي عبر Provider
+            final role = res['user'] != null ? res['user']['role'] : 'customer';
+            Provider.of<AuthState>(context, listen: false).login(res['token'], role);
+
+            _showSnackBar('Email verified successfully! Logging in...', Colors.green);
+            // الانتقال إلى الداشبورد
+            Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (route) => false); 
+        } else {
+            _showSnackBar(res['message'] ?? 'Verification failed (Code Invalid/Expired)', Colors.red);
+        }
+    } catch (e) {
+        _showSnackBar('An error occurred during verification.', Colors.red);
+    } finally {
+        setState(() => _isLoading = false);
     }
   }
 
-  Widget _buildTextField({
-    required IconData icon,
-    required String label,
-    bool obscure = false,
-    TextInputType keyboardType = TextInputType.text,
-    required Function(String) onChanged,
-    String? Function(String?)? validator,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextFormField(
-        obscureText: obscure,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.grey[700]),
-          labelText: label,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        onChanged: onChanged,
-        validator: validator,
-      ),
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isWeb = MediaQuery.of(context).size.width > 600;
+    
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF6E9),
+      appBar: AppBar(
+        title: Text(_isOTPSent ? 'Verify Email' : 'Sign Up'),
+        backgroundColor: const Color(0xFF62C6D9),
+        elevation: 0,
+      ),
       body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 50),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.person_add, size: 80, color: Color(0xFF007AFF)),
-              const SizedBox(height: 20),
-              const Text(
-                "Create Account",
-                style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF007AFF)),
-              ),
-              const SizedBox(height: 25),
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    _buildTextField(
-                      icon: Icons.person_outline,
-                      label: "Full Name",
-                      onChanged: (v) => name = v,
-                      validator: (v) =>
-                          v!.isEmpty ? "Please enter your full name" : null,
-                    ),
-                    _buildTextField(
-                      icon: Icons.email_outlined,
-                      label: "Email",
-                      keyboardType: TextInputType.emailAddress,
-                      onChanged: (v) => email = v,
-                      validator: (v) =>
-                          v!.isEmpty ? "Please enter your email" : null,
-                    ),
-                    _buildTextField(
-                      icon: Icons.lock_outline,
-                      label: "Password",
-                      obscure: true,
-                      onChanged: (v) => password = v,
-                      validator: (v) => v!.length < 6
-                          ? "Password must be at least 6 characters"
-                          : null,
-                    ),
-                    _buildTextField(
-                      icon: Icons.lock_outline,
-                      label: "Confirm Password",
-                      obscure: true,
-                      onChanged: (v) => confirmPassword = v,
-                      validator: (v) =>
-                          v!.isEmpty ? "Please confirm your password" : null,
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      value: gender.isNotEmpty ? gender : null,
-                      decoration: InputDecoration(
-                        labelText: "Gender",
-                        prefixIcon:
-                            const Icon(Icons.person, color: Colors.grey),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: "male", child: Text("Male")),
-                        DropdownMenuItem(value: "female", child: Text("Female")),
-                        DropdownMenuItem(value: "other", child: Text("Other")),
-                      ],
-                      onChanged: (v) => setState(() => gender = v ?? ""),
-                    ),
-                    _buildTextField(
-                      icon: Icons.cake_outlined,
-                      label: "Age (Optional)",
-                      keyboardType: TextInputType.number,
-                      onChanged: (v) => age = int.tryParse(v),
-                    ),
+        child: Container(
+          width: isWeb ? 450 : double.infinity, 
+          padding: const EdgeInsets.all(32.0),
+          child: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _buildIconHeader(_isOTPSent ? Icons.lock_open : Icons.person_add),
+                  const SizedBox(height: 30),
+
+                  if (!_isOTPSent) ...[
+                    // ... (حقول التسجيل: name, email, password, age, gender, role) ...
+                    _buildTextField(_nameController, 'Full Name', Icons.person),
                     const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF007AFF),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed: isLoading
-                            ? null
-                            : () {
-                                if (_formKey.currentState!.validate()) {
-                                  signupUser();
-                                }
-                              },
-                        child: isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                "Sign Up",
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16),
-                              ),
-                      ),
-                    ),
+                    _buildTextField(_emailController, 'Email', Icons.email, keyboardType: TextInputType.emailAddress),
+                    const SizedBox(height: 20),
+                    _buildPasswordField(_passwordController, 'Password'),
+                    const SizedBox(height: 20),
+                    _buildPasswordField(_confirmPasswordController, 'Confirm Password', isConfirm: true, compareTo: _passwordController),
+                    const SizedBox(height: 20),
+                    _buildTextField(_ageController, 'Age', Icons.cake, 
+                      keyboardType: TextInputType.number, 
+                      validator: (v) { final age = int.tryParse(v!); if (age == null || age < 1) return 'Enter a valid age'; return null; }),
+                    const SizedBox(height: 20),
+                    _buildGenderDropdown(),
+                    const SizedBox(height: 20),
+                    _buildRoleDropdown(),
+                    const SizedBox(height: 30),
+
+                    _buildMainButton('Sign Up', _signUp, _isLoading),
+
+                  ] else ...[
+                    // 💡 شاشة التحقق من الرمز
+                    const Text('Enter the 6-digit verification code sent to your email.', style: TextStyle(fontSize: 16), textAlign: TextAlign.center),
+                    const SizedBox(height: 20),
+                    _buildTextField(_otpController, 'Verification Code', Icons.verified_user, 
+                      keyboardType: TextInputType.number,
+                      validator: (v) => v!.length != 6 ? 'Code must be 6 digits' : null),
+                    const SizedBox(height: 30),
+                    _buildMainButton('Verify Email', _verifyOTP, _isLoading),
                     const SizedBox(height: 15),
-                    TextButton(
-                      onPressed: () =>
-                          Navigator.pushReplacementNamed(context, '/login'),
-                      child: const Text(
-                        "Already have an account? Log In",
-                        style: TextStyle(color: Colors.black87),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text("Or sign up using",
-                        style: TextStyle(color: Colors.black54)),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.facebook, color: Colors.blue, size: 28),
-                        SizedBox(width: 20),
-                        Icon(Icons.g_mobiledata,
-                            color: Colors.redAccent, size: 32),
-                      ],
-                    ),
+                    TextButton(onPressed: () { /* // يمكن إضافة منطق إعادة إرسال الرمز هنا */ }, child: const Text('Resend Code?', style: TextStyle(color: Colors.black54))),
                   ],
-                ),
+
+                  const SizedBox(height: 15),
+                  TextButton(
+                    onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+                    child: const Text("Already have an account? Log In", style: TextStyle(color: Color(0xFF62C6D9))),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  // 🏗️ الدوال المساعدة (بدون Lottie)
+  
+  Widget _buildIconHeader(IconData icon) {
+    return Center(
+      child: Icon(icon, size: 80, color: const Color(0xFF62C6D9)),
+    );
+  }
+
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        prefixIcon: Icon(icon, color: const Color(0xFF62C6D9))
+      ),
+      validator: validator ?? (value) => value!.isEmpty ? 'Please enter your $label' : null,
+    );
+  }
+
+  Widget _buildPasswordField(TextEditingController controller, String label, {bool isConfirm = false, TextEditingController? compareTo}) {
+    return TextFormField(
+      controller: controller,
+      obscureText: true,
+      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), prefixIcon: const Icon(Icons.lock, color: Color(0xFF62C6D9))),
+      validator: (value) {
+        if (value!.length < 6) return 'Password must be at least 6 characters';
+        if (isConfirm && value != compareTo!.text) return 'Passwords do not match';
+        return null;
+      },
+    );
+  }
+  
+  Widget _buildGenderDropdown() {
+    return DropdownButtonFormField<String>(
+      decoration: const InputDecoration(labelText: 'Gender', border: OutlineInputBorder(), prefixIcon: Icon(Icons.people, color: Color(0xFF62C6D9))),
+      value: _selectedGender,
+      items: ['male', 'female', 'other'].map((String value) => DropdownMenuItem<String>(value: value, child: Text(value.toUpperCase()))).toList(),
+      onChanged: (String? newValue) => setState(() => _selectedGender = newValue),
+      validator: (value) => value == null ? 'Please select gender' : null,
+    );
+  }
+
+  Widget _buildRoleDropdown() {
+    return DropdownButtonFormField<String>(
+      decoration: const InputDecoration(labelText: 'I am a...', border: OutlineInputBorder(), prefixIcon: Icon(Icons.handshake, color: Color(0xFF62C6D9))),
+      value: _selectedRole,
+      items: roles.map((String value) => DropdownMenuItem<String>(value: value, child: Text(value.toUpperCase()))).toList(),
+      onChanged: (String? newValue) => setState(() => _selectedRole = newValue!),
+    );
+  }
+
+  Widget _buildMainButton(String text, VoidCallback onPressed, bool isLoading) {
+    return ElevatedButton(
+      onPressed: isLoading ? null : onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF62C6D9),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: isLoading
+          ? const SizedBox(
+              width: 20, 
+              height: 20, 
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+            )
+          : Text(text, style: const TextStyle(fontSize: 18, color: Colors.white)),
     );
   }
 }

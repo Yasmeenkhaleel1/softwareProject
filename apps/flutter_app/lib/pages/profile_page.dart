@@ -1,106 +1,104 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
 
-class ProfilePage extends StatefulWidget {
-  final String userId; // تمرري ID المستخدم بعد تسجيل الدخول
-  const ProfilePage({super.key, required this.userId});
-
-  @override
-  State<ProfilePage> createState() => _ProfilePageState();
-}
-
-class _ProfilePageState extends State<ProfilePage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  File? _image;
-
-  final ImagePicker _picker = ImagePicker();
-
-  Future<void> _pickImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _image = File(pickedFile.path);
-      });
-    }
-  }
-
-  Future<void> _saveProfile() async {
-    final url = Uri.parse('http://localhost:5000/api/users/${widget.userId}');
-    var request = http.MultipartRequest('PUT', url);
-
-    request.fields['name'] = _nameController.text;
-    request.fields['email'] = _emailController.text;
-
-    if (_image != null) {
-      request.files.add(await http.MultipartFile.fromPath('profilePic', _image!.path));
-    }
-
-    var response = await request.send();
-
-    if (response.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully!')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error updating profile.')),
-      );
-    }
-  }
+class CustomerProfilePage extends StatelessWidget {
+  const CustomerProfilePage({super.key});
+  
+  // 💡 يمكنك جلب بيانات المستخدم الفعلية هنا من API (مثلاً: /api/users/:id)
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Profile'),
-        backgroundColor: Colors.pinkAccent,
+        title: const Text('My Customer Profile'),
+        backgroundColor: const Color(0xFF62C6D9),
+        elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
           child: Column(
-            children: [
-              GestureDetector(
-                onTap: _pickImage,
-                child: CircleAvatar(
-                  radius: 60,
-                  backgroundImage:
-                      _image != null ? FileImage(_image!) : const AssetImage('assets/default_user.png') as ImageProvider,
-                  child: const Align(
-                    alignment: Alignment.bottomRight,
-                    child: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.edit, color: Colors.pinkAccent),
-                    ),
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              // 🖼️ صورة البروفايل
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF62C6D9), width: 3),
+                  image: const DecorationImage(
+                    image: AssetImage('assets/images/default_avatar.png'), // استخدم صورة افتراضية
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
+              const SizedBox(height: 15),
+
+              // 🏷️ اسم المستخدم ودوره
+              const Text(
+                'Ahmad Al-Saleh', // اسم افتراضي
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E2A38)),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+              const Text(
+                'Role: Customer',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _saveProfile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.pinkAccent,
-                  minimumSize: const Size(double.infinity, 50),
+              const SizedBox(height: 30),
+
+              // 📝 قائمة التفاصيل
+              Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                child: Padding(
+                  padding: const EdgeInsets.all(15.0),
+                  child: Column(
+                    children: <Widget>[
+                      _buildProfileDetail(Icons.email, 'Email', 'ahmad.saleh@example.com'),
+                      _buildProfileDetail(Icons.phone, 'Phone', '+962 7XXXXXXXX'),
+                      _buildProfileDetail(Icons.cake, 'Age', '30'),
+                      _buildProfileDetail(Icons.people, 'Gender', 'Male'),
+                    ],
+                  ),
                 ),
-                child: const Text('Save Changes'),
+              ),
+              const SizedBox(height: 30),
+
+              // ✍️ زر تعديل البروفايل
+              ElevatedButton.icon(
+                onPressed: () {
+                  // 💡 هنا سيتم الانتقال لصفحة تعديل البيانات
+                },
+                icon: const Icon(Icons.edit, color: Colors.white),
+                label: const Text('Edit Profile Information', style: TextStyle(fontSize: 16, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF62C6D9),
+                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+  
+  // 🏗️ وظيفة بناء تفاصيل البروفايل
+  Widget _buildProfileDetail(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, color: const Color(0xFF62C6D9), size: 24),
+          const SizedBox(width: 15),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+              Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ],
       ),
     );
   }
