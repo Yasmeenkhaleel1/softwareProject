@@ -233,7 +233,7 @@ class _SignUpPageState extends State<SignUpPage> {
   Widget _buildGenderDropdown() {
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: 'Gender', border: OutlineInputBorder(), prefixIcon: Icon(Icons.people, color: Color(0xFF62C6D9))),
-      value: _selectedGender,
+      initialValue: _selectedGender,
       items: ['male', 'female', 'other'].map((String value) => DropdownMenuItem<String>(value: value, child: Text(value.toUpperCase()))).toList(),
       onChanged: (String? newValue) => setState(() => _selectedGender = newValue),
       validator: (value) => value == null ? 'Please select gender' : null,
@@ -243,7 +243,7 @@ class _SignUpPageState extends State<SignUpPage> {
   Widget _buildRoleDropdown() {
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: 'I am a...', border: OutlineInputBorder(), prefixIcon: Icon(Icons.handshake, color: Color(0xFF62C6D9))),
-      value: _selectedRole,
+      initialValue: _selectedRole,
       items: roles.map((String value) => DropdownMenuItem<String>(value: value, child: Text(value.toUpperCase()))).toList(),
       onChanged: (String? newValue) => setState(() => _selectedRole = newValue!),
     );

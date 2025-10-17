@@ -1,104 +1,191 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
 
-class CustomerProfilePage extends StatelessWidget {
+class CustomerProfilePage extends StatefulWidget {
   const CustomerProfilePage({super.key});
-  
-  // 💡 يمكنك جلب بيانات المستخدم الفعلية هنا من API (مثلاً: /api/users/:id)
+
+  @override
+  _CustomerProfilePageState createState() => _CustomerProfilePageState();
+}
+
+class _CustomerProfilePageState extends State<CustomerProfilePage> {
+  Map<String, dynamic>? user;
+  bool loading = true;
+  bool editing = false;
+  File? _image;
+  final picker = ImagePicker();
+
+  // Controllers for editable fields
+  final nameController = TextEditingController();
+  final ageController = TextEditingController();
+  final genderController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchUser();
+  }
+
+  Future<void> fetchUser() async {
+    setState(() => loading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+
+      final res = await http.get(
+        Uri.parse('http://localhost:5000/api/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (res.statusCode == 200) {
+        user = json.decode(res.body)['user'];
+        nameController.text = user!['name'];
+        ageController.text = user!['age'].toString();
+        genderController.text = user!['gender'];
+      } else {
+        print('Failed to fetch user');
+      }
+    } catch (e) {
+      print('Error fetching user: $e');
+    } finally {
+      setState(() => loading = false);
+    }
+  }
+
+  Future<void> pickImage() async {
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() => _image = File(pickedFile.path));
+    }
+  }
+
+  Future<void> updateProfile() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+
+      final request = http.MultipartRequest(
+          'PUT', Uri.parse('http://localhost:5000/api/users/${user!["_id"]}'));
+      request.headers['Authorization'] = 'Bearer $token';
+      request.fields['name'] = nameController.text;
+      request.fields['age'] = ageController.text;
+      request.fields['gender'] = genderController.text;
+
+      if (_image != null) {
+        request.files.add(await http.MultipartFile.fromPath(
+          'profilePic',
+          _image!.path,
+        ));
+      }
+
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        print('Profile updated');
+        fetchUser(); // Refresh data
+        setState(() => editing = false);
+      } else {
+        print('Failed to update profile');
+      }
+    } catch (e) {
+      print('Error updating profile: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Customer Profile'),
-        backgroundColor: const Color(0xFF62C6D9),
-        elevation: 0,
+        title: Text('Customer Profile'),
+        backgroundColor: Colors.lightBlue[300],
+        actions: [
+          if (!editing)
+            IconButton(
+              icon: Icon(Icons.edit),
+              onPressed: () => setState(() => editing = true),
+            ),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              // 🖼️ صورة البروفايل
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF62C6D9), width: 3),
-                  image: const DecorationImage(
-                    image: AssetImage('assets/images/default_avatar.png'), // استخدم صورة افتراضية
-                    fit: BoxFit.cover,
+      backgroundColor: Colors.lightBlue[50],
+      body: loading
+          ? Center(child: CircularProgressIndicator())
+          : user == null
+              ? Center(child: Text('User not found'))
+              : SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Card(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                      elevation: 5,
+                      color: Colors.white,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 30, horizontal: 20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: editing ? pickImage : null,
+                              child: CircleAvatar(
+                                radius: 50,
+                                backgroundImage: _image != null
+                                    ? FileImage(_image!)
+                                    : user!['profilePic'] != null
+                                        ? NetworkImage(user!['profilePic'])
+                                            as ImageProvider
+                                        : AssetImage('assets/default.png'),
+                              ),
+                            ),
+                            SizedBox(height: 20),
+                            buildField('Name', nameController, editing),
+                            buildField('Email',
+                                TextEditingController(text: user!['email']),
+                                false),
+                            buildField('Age', ageController, editing,
+                                keyboardType: TextInputType.number),
+                            buildField('Gender', genderController, editing),
+                            buildField('Role',
+                                TextEditingController(text: user!['role']),
+                                false),
+                            SizedBox(height: 20),
+                            if (editing)
+                              ElevatedButton(
+                                onPressed: updateProfile,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.lightBlue[300],
+                                ),
+                                child: Text('Save Changes'),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 15),
-
-              // 🏷️ اسم المستخدم ودوره
-              const Text(
-                'Ahmad Al-Saleh', // اسم افتراضي
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E2A38)),
-              ),
-              const Text(
-                'Role: Customer',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-              const SizedBox(height: 30),
-
-              // 📝 قائمة التفاصيل
-              Card(
-                elevation: 3,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                child: Padding(
-                  padding: const EdgeInsets.all(15.0),
-                  child: Column(
-                    children: <Widget>[
-                      _buildProfileDetail(Icons.email, 'Email', 'ahmad.saleh@example.com'),
-                      _buildProfileDetail(Icons.phone, 'Phone', '+962 7XXXXXXXX'),
-                      _buildProfileDetail(Icons.cake, 'Age', '30'),
-                      _buildProfileDetail(Icons.people, 'Gender', 'Male'),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
-
-              // ✍️ زر تعديل البروفايل
-              ElevatedButton.icon(
-                onPressed: () {
-                  // 💡 هنا سيتم الانتقال لصفحة تعديل البيانات
-                },
-                icon: const Icon(Icons.edit, color: Colors.white),
-                label: const Text('Edit Profile Information', style: TextStyle(fontSize: 16, color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF62C6D9),
-                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
-  
-  // 🏗️ وظيفة بناء تفاصيل البروفايل
-  Widget _buildProfileDetail(IconData icon, String label, String value) {
+
+  Widget buildField(String label, TextEditingController controller, bool editable,
+      {TextInputType keyboardType = TextInputType.text}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, color: const Color(0xFF62C6D9), size: 24),
-          const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey)),
-              Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-            ],
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: TextField(
+        controller: controller,
+        enabled: editable,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.lightBlue[800]),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        ],
+          fillColor: editable ? Colors.blue[50] : Colors.grey[200],
+          filled: true,
+        ),
       ),
     );
   }

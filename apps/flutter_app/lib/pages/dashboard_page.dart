@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_state.dart';
+import './landing_page.dart';
 import 'profile_page.dart'; // Already created
 
 // 💡 Dummy pages for other roles
@@ -10,7 +11,8 @@ class SpecialistProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Specialist Dashboard')),
-      body: const Center(child: Text('Welcome, Specialist!', style: TextStyle(fontSize: 24))),
+      body: const Center(
+          child: Text('Welcome, Specialist!', style: TextStyle(fontSize: 24))),
     );
   }
 }
@@ -21,7 +23,8 @@ class AdminDashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Admin Console')),
-      body: const Center(child: Text('Welcome, Admin!', style: TextStyle(fontSize: 24))),
+      body: const Center(
+          child: Text('Welcome, Admin!', style: TextStyle(fontSize: 24))),
     );
   }
 }
@@ -31,44 +34,26 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 👁️ Listen to the AuthState to get the role
     final authState = Provider.of<AuthState>(context);
 
-    if (authState.isLoading) {
+    if (!authState.isAuthenticated || authState.userRole == null) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: Text('Error: Not logged in')),
       );
     }
-    
-    // Check authentication status
-    if (!authState.isAuthenticated || authState.userRole == null) {
-      // If not authenticated, redirect to the landing page
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-      });
-      return const Scaffold(body: Center(child: Text('Redirecting...')));
-    }
 
-    // ➡️ Render the correct screen based on the user role
-    Widget content;
+    // Decide which page to show based on user role
     switch (authState.userRole) {
       case 'customer':
-        // Using the profile page as the initial dashboard for the customer
-        content = const CustomerProfilePage(); 
-        break;
+        return LandingPage();
       case 'specialist':
-        content = const SpecialistProfilePage();
-        break;
+        return const SpecialistProfilePage();
       case 'admin':
-        content = const AdminDashboardPage();
-        break;
+        return const AdminDashboardPage();
       default:
-        // Fallback or error state
-        content = const Center(child: Text('Error: Unknown User Role'));
+        return const Scaffold(
+          body: Center(child: Text('Error: Unknown role')),
+        );
     }
-
-    // 💡 The actual content is wrapped in a Scaffold, but since the profile pages 
-    // already have AppBars, we return the content directly.
-    return content;
   }
 }

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/api_service.dart';
 import '../models/auth_state.dart';
-import 'signup_page.dart'; // للتنقل إلى صفحة التسجيل
-import 'dashboard_page.dart'; // للتنقل بعد تسجيل الدخول الناجح
+// للتنقل إلى صفحة التسجيل
+// للتنقل بعد تسجيل الدخول الناجح
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
