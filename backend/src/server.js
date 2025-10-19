@@ -1,22 +1,15 @@
+// src/server.js
 import express from 'express';
-import initAPP from './app.js';
-import userModel from './models/user/user.model.js';
+import dotenv from 'dotenv';
+import initAPP from './app.js';  // ✅ نستدعي التطبيق الجاهز
+
+dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 4000;
+initAPP(app);  // ✅ نحضّر التطبيق (جميع الإعدادات والمسارات)
 
-// تهيئة التطبيق (اتصال DB + Routes)
-initAPP(app);
+const PORT = process.env.PORT || 5000;
 
-// مثال على Endpoint بسيط لجلب المستخدمين
-app.get('/users', async (req, res) => {
-  try {
-    const users = await userModel.find();
-    res.json({ message: "success", users });
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
-
-app.listen(port, () => console.log(`🚀 Server running on port ${port}`));

@@ -1,3 +1,27 @@
+# Node.js
 node_modules/
+npm-debug.log
+yarn-error.log
 .env
+.DS_Store
 
+# Logs
+logs
+*.log
+logs/*.log
+
+# Build output
+dist/
+build/
+coverage/
+
+# IDE and system files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# Dependencies cache
+package-lock.json
