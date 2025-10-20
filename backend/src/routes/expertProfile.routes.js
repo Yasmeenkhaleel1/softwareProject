@@ -9,40 +9,41 @@ import {
   rejectExpertProfile,
 } from "../controllers/expertProfile.controller.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
-import { auth } from "../middleware/auth.js"; // ✅ استدعاء الميدلوير
+import { auth } from "../middleware/auth.js"; // ✅ ميدلوير التحقق من التوكن
 
 const router = express.Router();
 
 /**
- * Auth Rules:
- * - EXPERT فقط يستطيع إنشاء أو تعديل بروفايله.
- * - ADMIN فقط يستطيع الموافقة أو الرفض.
- * - أي مستخدم مسجل يمكنه عرض بروفايله.
- * - العرض العام مفتوح للجميع (view/:userId).
+ * 🎯 قواعد الوصول:
+ * - EXPERT: إنشاء/تحديث/عرض بروفايله.
+ * - ADMIN: عرض جميع البروفايلات + الموافقة/الرفض.
+ * - Public: عرض أي بروفايل خبير منشور.
  */
 
-// ===== User (Expert) endpoints =====
-router.post("/expertProfiles", auth("EXPERT"), createExpertProfile);
-router.get("/expertProfiles/me", auth(), getMyExpertProfile);
-router.patch("/expertProfiles/:profileId", auth("EXPERT"), updateMyExpertProfile);
+// ===== 🧠 Expert endpoints =====
+router.post("/", auth("EXPERT"), createExpertProfile); // إنشاء بروفايل جديد
+router.get("/me", auth("EXPERT"), getMyExpertProfile); // عرض بروفايله الشخصي
+router.put("/:profileId", auth("EXPERT"), updateMyExpertProfile); // تحديث البروفايل (طالما "pending")
 
-// ===== Admin endpoints =====
-router.get("/expertProfiles", auth("ADMIN"), listExpertProfiles); // ?status=pending
-router.patch("/expertProfiles/:id/approve", auth("ADMIN"), approveExpertProfile);
-router.patch("/expertProfiles/:id/reject", auth("ADMIN"), rejectExpertProfile);
+// ===== 🛡️ Admin endpoints =====
+router.get("/", auth("ADMIN"), listExpertProfiles); // عرض جميع البروفايلات (مع ?status=pending)
+router.put("/:id/approve", auth("ADMIN"), approveExpertProfile); // الموافقة
+router.put("/:id/reject", auth("ADMIN"), rejectExpertProfile); // الرفض
 
-// ===== Public endpoint (عرض بروفايل خبير لأي مستخدم) =====
-router.get("/expertProfiles/view/:userId", async (req, res) => {
+// ===== 🌍 Public endpoint (عرض بروفايل خبير لأي مستخدم) =====
+router.get("/view/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    const profile = await ExpertProfile.findOne({ userId });
+    const profile = await ExpertProfile.findOne({ userId }).select(
+      "name bio specialization experience location gallery certificates profileImageUrl status"
+    );
 
     if (!profile)
       return res.status(404).json({ message: "Profile not found" });
 
     res.status(200).json(profile);
   } catch (err) {
-    console.error("❌ Error fetching profile:", err);
+    console.error("❌ Error fetching public profile:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

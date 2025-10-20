@@ -69,7 +69,7 @@ router.post(
       role,
       isVerified: false,
       verificationCode: otpCode,
-      codeExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 دقائق
+      codeExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
 
     try {
@@ -144,6 +144,7 @@ router.post("/login", async (req, res) => {
     { expiresIn: process.env.JWT_EXPIRES || "7d" }
   );
 
+  // ✅ تعديل الإرجاع ليشمل القيم الجديدة
   res.json({
     token,
     user: {
@@ -152,6 +153,9 @@ router.post("/login", async (req, res) => {
       role: user.role,
       gender: user.gender,
       age: user.age,
+      isVerified: user.isVerified,
+      isApproved: user.isApproved, // ✅ تمت إضافتها
+      hasProfile: user.hasProfile, // ✅ تمت إضافتها
     },
   });
 });

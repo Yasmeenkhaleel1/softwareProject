@@ -32,17 +32,18 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_passCtrl.text != _confirmCtrl.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match')),
-      );
-      return;
-    }
+ Future<void> _submit() async {
+  if (!_formKey.currentState!.validate()) return;
+  if (_passCtrl.text != _confirmCtrl.text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Passwords do not match')),
+    );
+    return;
+  }
 
-    setState(() => loading = true);
+  setState(() => loading = true);
 
+  try {
     final err = await AuthService().register(
       email: _emailCtrl.text.trim(),
       password: _passCtrl.text,
@@ -51,22 +52,27 @@ class _SignupPageState extends State<SignupPage> {
       role: role,
     );
 
-    setState(() => loading = false);
-
     if (err == null) {
-  // ✅ بعد التسجيل بنجاح، ننتقل مباشرة لصفحة إدخال كود التفعيل
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (_) => VerifyCodePage(email: _emailCtrl.text.trim()),
-    ),
-  );
-}
- else {
+      // ✅ بعد التسجيل الناجح
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VerifyCodePage(email: _emailCtrl.text.trim()),
+        ),
+      );
+    } else {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(err)));
     }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("⚠️ Error: $e")),
+    );
+  } finally {
+    setState(() => loading = false);
   }
+}
+
 
   Widget _buildTextField({
     required IconData icon,
@@ -212,7 +218,7 @@ class _SignupPageState extends State<SignupPage> {
                     items: const [
                       DropdownMenuItem(value: 'CUSTOMER', child: Text('CUSTOMER')),
                       DropdownMenuItem(value: 'EXPERT', child: Text('EXPERT')),
-                      DropdownMenuItem(value: 'ADMIN', child: Text('ADMIN')),
+                      
                     ],
                     onChanged: (v) => setState(() => role = v ?? 'CUSTOMER'),
                   ),

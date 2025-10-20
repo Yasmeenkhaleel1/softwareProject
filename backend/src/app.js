@@ -36,7 +36,8 @@ const initAPP = (app) => {
 
   // ✅ تعريف المسارات (Routes)
   app.use('/api', userRouter);
-  app.use('/api', expertProfileRouter);
+  app.use('/api/expertProfiles', expertProfileRouter);
+
   app.use('/api', uploadRouter);
   app.use('/auth', authRouter);  // ✅ مهم: إضافة مسار auth
 
