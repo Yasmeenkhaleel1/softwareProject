@@ -16,9 +16,28 @@ router.get("/me", auth(), async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json({ user });
+
+    // ✅ إرجاع معلومات إضافية لدعم منطق الواجهة
+    res.json({
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        age: user.age,
+        gender: user.gender,
+        role: user.role,
+        profilePic: user.profilePic,
+        isVerified: user.isVerified,
+        isApproved: user.isApproved, // ✅ تمت إضافتها
+        hasProfile: user.hasProfile, // ✅ تمت إضافتها
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching user", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Error fetching user", error: error.message });
   }
 });
 
@@ -30,12 +49,11 @@ router.put("/me", auth(), async (req, res) => {
   try {
     const { name, age, gender, profilePic } = req.body;
 
-    // ⚡ نحدّث كل الحقول الموجودة
     const updates = {};
     if (name) updates.name = name;
     if (age) updates.age = age;
     if (gender) updates.gender = gender;
-    if (profilePic) updates.profilePic = profilePic; // ✅ نحفظ الصورة الجديدة في DB
+    if (profilePic) updates.profilePic = profilePic;
 
     const updatedUser = await userModel
       .findByIdAndUpdate(req.user.id, updates, { new: true })
@@ -44,17 +62,20 @@ router.put("/me", auth(), async (req, res) => {
     if (!updatedUser)
       return res.status(404).json({ message: "User not found" });
 
-    res.json({ message: "Profile updated successfully", user: updatedUser });
+    res.json({
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
   } catch (error) {
     console.error("❌ Error updating profile:", error);
-    res.status(500).json({ message: "Error updating profile", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Error updating profile", error: error.message });
   }
 });
 
-
-
 /**
- * ✅ (اختياري) إنشاء مستخدم جديد — هذا عندك فعلياً
+ * ✅ (اختياري) إنشاء مستخدم جديد
  */
 router.post("/signup", async (req, res) => {
   try {
@@ -64,12 +85,21 @@ router.post("/signup", async (req, res) => {
     if (existingUser)
       return res.status(400).json({ message: "Email already exists" });
 
-    const newUser = new userModel({ name, email, password, age, gender, role });
+    const newUser = new userModel({
+      name,
+      email,
+      password,
+      age,
+      gender,
+      role,
+    });
     await newUser.save();
 
     res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
-    res.status(500).json({ message: "Internal server error", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: err.message });
   }
 });
 

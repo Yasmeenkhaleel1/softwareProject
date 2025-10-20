@@ -17,12 +17,14 @@ const userSchema = new mongoose.Schema(
     // ✅ صورة المستخدم (profile picture)
     profilePic: { type: String, default: null },
 
-    // ✅ حالة التفعيل
+    // ✅ حالة التفعيل بالبريد (OTP)
     isVerified: { type: Boolean, default: false },
-
-    // ✅ كود التفعيل (OTP)
     verificationCode: { type: String },
     codeExpiresAt: { type: Date },
+
+    // ✅ حالة الخبير
+    isApproved: { type: Boolean, default: false }, // هل الأدمن وافق عليه
+    hasProfile: { type: Boolean, default: false }, // هل الخبير أنشأ ملفه الشخصي
   },
   { timestamps: true }
 );

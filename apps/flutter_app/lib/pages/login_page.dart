@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+
+// ✅ استيراد الصفحات حسب نظامك الصحيح
 import 'landing_page.dart';
 import 'expert_profile_page.dart';
+import 'waiting_approval_page.dart';
 import 'admin_dashboard_page.dart';
-import 'customer_profile_page.dart';
+import 'customer_dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   final Future<void> Function() onLoginSuccess;
@@ -39,7 +42,7 @@ class _LoginPageState extends State<LoginPage> {
       if (response.statusCode == 200 && data['token'] != null) {
         final prefs = await SharedPreferences.getInstance();
 
-        // ✅ نحفظ فقط المعلومات الضرورية
+        // ✅ نحفظ المعلومات الضرورية
         await prefs.setString('token', data['token']);
         await prefs.setString('role', data['user']['role']);
         await prefs.setString('email', data['user']['email']);
@@ -50,39 +53,70 @@ class _LoginPageState extends State<LoginPage> {
 
         await widget.onLoginSuccess();
 
-        // ✅ التوجيه حسب الدور
-        final String role = data['user']['role'];
-
+        final String role = data['user']['role'].toUpperCase();
         Widget nextPage;
-        switch (role.toUpperCase()) {
-          case 'EXPERT':
-            nextPage = const ExpertProfilePage(); // يملأ بياناته وينتظر الموافقة
-            break;
-          case 'ADMIN':
-            nextPage = const AdminDashboardPage(); // لوحة تحكم المدير
-            break;
-          case 'CUSTOMER':
-            nextPage = const CustomerProfilePage(); // صفحة الزبون
-            break;
-          default:
-            nextPage = LandingPage(
-              isLoggedIn: true,
-              onLogout: () async {
-                await AuthService().logout();
-              },
-              userRole: role,
-            );
+
+        if (role == 'ADMIN') {
+          nextPage = const AdminDashboardPage();
+
+        } else if (role == 'CUSTOMER') {
+          nextPage = LandingPage(
+            isLoggedIn: true,
+            onLogout: () async => await AuthService().logout(),
+            userRole: role,
+          );
+
+        } else if (role == 'EXPERT') {
+          // 🔹 تحقق من حالة الخبير
+          final res = await http.get(
+            Uri.parse('http://localhost:5000/api/me'),
+            headers: {'Authorization': 'Bearer ${data['token']}'},
+          );
+
+          if (res.statusCode == 200) {
+            final info = jsonDecode(res.body);
+            final approved = info['user']['isApproved'] == true;
+            final hasProfile = info['user']['hasProfile'] == true;
+
+            if (!hasProfile) {
+              // 🟡 خبير جديد → يملأ بياناته
+              nextPage = const ExpertProfilePage();
+            } else if (!approved) {
+              // 🟠 عنده بروفايل لكن ينتظر الموافقة
+              nextPage = const WaitingApprovalPage();
+            } else {
+              // 🟢 خبير مقبول من الأدمن → يذهب للصفحة الرئيسية
+              nextPage = LandingPage(
+                isLoggedIn: true,
+                onLogout: () async => await AuthService().logout(),
+                userRole: role,
+              );
+            }
+          } else {
+            // 🔴 إذا فشل جلب البيانات لأي سبب → نوجهه لصفحة الانتظار
+            nextPage = const WaitingApprovalPage();
+          }
+
+        } else {
+          // أي دور آخر (احتياط)
+          nextPage = LandingPage(
+            isLoggedIn: true,
+            onLogout: () async => await AuthService().logout(),
+            userRole: role,
+          );
         }
 
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => nextPage),
         );
+
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? "❌ Login failed")),
         );
       }
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("⚠️ Error: $e")),
@@ -135,9 +169,7 @@ class _LoginPageState extends State<LoginPage> {
               MaterialPageRoute(
                 builder: (_) => LandingPage(
                   isLoggedIn: false,
-                  onLogout: () async {
-                    await AuthService().logout();
-                  },
+                  onLogout: () async => await AuthService().logout(),
                 ),
               ),
             );
@@ -195,9 +227,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         onPressed: isLoading ? null : loginUser,
                         child: isLoading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white,
-                              )
+                            ? const CircularProgressIndicator(color: Colors.white)
                             : const Text(
                                 "Login",
                                 style: TextStyle(
@@ -211,7 +241,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 15),
                     TextButton(
                       onPressed: () =>
-                          Navigator.pushNamed(context, '/signup'),
+                          Navigator.pushNamed(context, '/signup_page'),
                       child: const Text(
                         "Don't have an account? Sign Up",
                         style: TextStyle(color: Color(0xFF62C6D9)),
@@ -219,24 +249,11 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     TextButton(
                       onPressed: () =>
-                          Navigator.pushNamed(context, '/change-password'),
+                          Navigator.pushNamed(context, '/change_password_page'),
                       child: const Text(
                         "Change Password",
                         style: TextStyle(color: Colors.redAccent),
                       ),
-                    ),
-                    const SizedBox(height: 15),
-                    const Text("Or login using",
-                        style: TextStyle(color: Colors.black54)),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.facebook, color: Colors.blue, size: 28),
-                        SizedBox(width: 20),
-                        Icon(Icons.g_mobiledata,
-                            color: Colors.redAccent, size: 32),
-                      ],
                     ),
                   ],
                 ),

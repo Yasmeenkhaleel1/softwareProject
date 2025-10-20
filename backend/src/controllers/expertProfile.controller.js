@@ -1,10 +1,10 @@
 // src/controllers/expertProfile.controller.js
 import ExpertProfile from "../models/expert/expertProfile.model.js";
+import User from "../models/user/user.model.js"; // ✅ استدعاء موديل المستخدم
 
 // ===== Create new expert profile =====
 export const createExpertProfile = async (req, res) => {
   try {
-    // 🔐 خذ الـ userId من التوكن (اللي جهزه الميدلوير auth)
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
@@ -47,14 +47,17 @@ export const createExpertProfile = async (req, res) => {
     });
 
     await profile.save();
-    return res
-      .status(201)
-      .json({ message: "Profile submitted for admin review.", profile });
+
+    // ✅ تحديث حالة المستخدم: أصبح لديه بروفايل
+    await User.findByIdAndUpdate(userId, { hasProfile: true });
+
+    return res.status(201).json({
+      message: "Profile submitted for admin review.",
+      profile,
+    });
   } catch (err) {
     console.error("createExpertProfile error:", err);
-    return res
-      .status(500)
-      .json({ message: "Internal server error", error: err.message });
+    return res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };
 
@@ -70,9 +73,7 @@ export const getMyExpertProfile = async (req, res) => {
     return res.json({ profile });
   } catch (err) {
     console.error("getMyExpertProfile error:", err);
-    return res
-      .status(500)
-      .json({ message: "Internal server error", error: err.message });
+    return res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };
 
@@ -86,9 +87,7 @@ export const updateMyExpertProfile = async (req, res) => {
     if (!profile) return res.status(404).json({ message: "Profile not found" });
 
     if (profile.status !== "pending") {
-      return res
-        .status(400)
-        .json({ message: "Only pending profiles can be updated." });
+      return res.status(400).json({ message: "Only pending profiles can be updated." });
     }
 
     const fields = [
@@ -109,9 +108,7 @@ export const updateMyExpertProfile = async (req, res) => {
     return res.json({ message: "Profile updated (still pending).", profile });
   } catch (err) {
     console.error("updateMyExpertProfile error:", err);
-    return res
-      .status(500)
-      .json({ message: "Internal server error", error: err.message });
+    return res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };
 
@@ -124,12 +121,11 @@ export const listExpertProfiles = async (req, res) => {
     return res.json(profiles);
   } catch (err) {
     console.error("listExpertProfiles error:", err);
-    return res
-      .status(500)
-      .json({ message: "Internal server error", error: err.message });
+    return res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };
 
+// ===== Approve profile =====
 export const approveExpertProfile = async (req, res) => {
   try {
     const { id } = req.params;
@@ -139,15 +135,18 @@ export const approveExpertProfile = async (req, res) => {
     profile.status = "approved";
     profile.rejectionReason = undefined;
     await profile.save();
+
+    // ✅ تحديث حالة المستخدم: تمت الموافقة عليه
+    await User.findByIdAndUpdate(profile.userId, { isApproved: true });
+
     return res.json({ message: "Expert profile approved.", profile });
   } catch (err) {
     console.error("approveExpertProfile error:", err);
-    return res
-      .status(500)
-      .json({ message: "Internal server error", error: err.message });
+    return res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };
 
+// ===== Reject profile =====
 export const rejectExpertProfile = async (req, res) => {
   try {
     const { id } = req.params;
@@ -159,11 +158,13 @@ export const rejectExpertProfile = async (req, res) => {
     profile.status = "rejected";
     profile.rejectionReason = reason || "No reason provided";
     await profile.save();
+
+    // ✅ عند الرفض: تأكد من بقاء isApproved = false
+    await User.findByIdAndUpdate(profile.userId, { isApproved: false });
+
     return res.json({ message: "Expert profile rejected.", profile });
   } catch (err) {
     console.error("rejectExpertProfile error:", err);
-    return res
-      .status(500)
-      .json({ message: "Internal server error", error: err.message });
+    return res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };

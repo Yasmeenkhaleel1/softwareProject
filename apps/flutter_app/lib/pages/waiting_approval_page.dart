@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
+import 'landing_page.dart';
 
 class WaitingApprovalPage extends StatelessWidget {
   const WaitingApprovalPage({super.key});
@@ -14,6 +16,24 @@ class WaitingApprovalPage extends StatelessWidget {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            // ✅ العودة إلى LandingPage مع الحفاظ على تسجيل الدخول
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => LandingPage(
+                  isLoggedIn: true,
+                  onLogout: () async {
+                    await AuthService().logout();
+                  },
+                  userRole: 'EXPERT', // لأنه خبير غير موافَق عليه بعد
+                ),
+              ),
+            );
+          },
+        ),
       ),
       body: Center(
         child: Padding(
@@ -21,7 +41,7 @@ class WaitingApprovalPage extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Icon(Icons.verified_user, size: 64, color: Color(0xFF62C6D9)),
+              Icon(Icons.hourglass_empty, size: 70, color: Color(0xFF62C6D9)),
               SizedBox(height: 16),
               Text(
                 "Your expert profile is under review by the admin.",
