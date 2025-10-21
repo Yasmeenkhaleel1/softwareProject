@@ -7,6 +7,7 @@ import dotenv from 'dotenv';           // ✅ جديد
 import { fileURLToPath } from 'url';
 
 // Routers
+import customerRoutes from "./routes/customer.routes.js";
 import userRouter from './routes/user.routes.js';
 import expertProfileRouter from './routes/expertProfile.routes.js';
 import uploadRouter from './routes/upload.routes.js';
@@ -40,7 +41,7 @@ const initAPP = (app) => {
 
   app.use('/api', uploadRouter);
   app.use('/auth', authRouter);  // ✅ مهم: إضافة مسار auth
-
+app.use("/api", customerRoutes);
   console.log('✅ App initialized successfully');
 };
 

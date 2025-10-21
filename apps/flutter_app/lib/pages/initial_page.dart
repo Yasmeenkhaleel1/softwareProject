@@ -4,7 +4,7 @@ import 'login_page.dart';
 import 'landing_page.dart';
 import 'expert_profile_page.dart';
 import 'admin_dashboard_page.dart';
-import 'customer_home_page.dart';
+import 'customer_dashboard_page.dart';
 import '../services/auth_service.dart';
 
 class InitialPage extends StatefulWidget {

@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 
-// ✅ استيراد الصفحات حسب نظامك الصحيح
+// ✅ استيراد الصفحات
 import 'landing_page.dart';
 import 'expert_profile_page.dart';
 import 'waiting_approval_page.dart';
@@ -56,10 +56,17 @@ class _LoginPageState extends State<LoginPage> {
         final String role = data['user']['role'].toUpperCase();
         Widget nextPage;
 
+        // 🟩 هنا منطق التنقل الصحيح
         if (role == 'ADMIN') {
-          nextPage = const AdminDashboardPage();
+          // ✅ الأدمن يدخل إلى صفحة اللاندنغ أولاً
+          nextPage = LandingPage(
+            isLoggedIn: true,
+            onLogout: () async => await AuthService().logout(),
+            userRole: role,
+          );
 
         } else if (role == 'CUSTOMER') {
+          // 👤 المستخدم العادي
           nextPage = LandingPage(
             isLoggedIn: true,
             onLogout: () async => await AuthService().logout(),
@@ -67,7 +74,7 @@ class _LoginPageState extends State<LoginPage> {
           );
 
         } else if (role == 'EXPERT') {
-          // 🔹 تحقق من حالة الخبير
+          // 🧠 الخبير (تحقق من حالته)
           final res = await http.get(
             Uri.parse('http://localhost:5000/api/me'),
             headers: {'Authorization': 'Bearer ${data['token']}'},
@@ -79,13 +86,10 @@ class _LoginPageState extends State<LoginPage> {
             final hasProfile = info['user']['hasProfile'] == true;
 
             if (!hasProfile) {
-              // 🟡 خبير جديد → يملأ بياناته
               nextPage = const ExpertProfilePage();
             } else if (!approved) {
-              // 🟠 عنده بروفايل لكن ينتظر الموافقة
               nextPage = const WaitingApprovalPage();
             } else {
-              // 🟢 خبير مقبول من الأدمن → يذهب للصفحة الرئيسية
               nextPage = LandingPage(
                 isLoggedIn: true,
                 onLogout: () async => await AuthService().logout(),
@@ -93,7 +97,6 @@ class _LoginPageState extends State<LoginPage> {
               );
             }
           } else {
-            // 🔴 إذا فشل جلب البيانات لأي سبب → نوجهه لصفحة الانتظار
             nextPage = const WaitingApprovalPage();
           }
 

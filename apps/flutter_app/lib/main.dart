@@ -188,7 +188,8 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
         '/expert_dashboard': (context) => const ExpertDashboardPage(),
         '/expert_profile_view': (context) => const ExpertProfileViewPage(),
         '/verify-code': (context) => const VerifyCodePage(email: ''),
-        '/customer_dashboard': (context) => const CustomerProfilePage(),
+        '/customer_home_page': (context) =>  CustomerHomePage(),
+        '/customer_profile': (context) => const CustomerProfilePage(),
         '/admin_dashboard': (context) => const AdminDashboardPage(),
       },
     );
