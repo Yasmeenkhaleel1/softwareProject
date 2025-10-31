@@ -11,8 +11,14 @@ import userRouter from './routes/user.routes.js';
 import expertProfileRouter from './routes/expertProfile.routes.js';
 import uploadRouter from './routes/upload.routes.js';
 import authRouter from './routes/auth.routes.js';    // ✅ جديد
+import customerRoutes from "./routes/customer.routes.js";
 
+import adminRoutes from "./routes/admin.route.js";
+import notificationRoutes from "./routes/notification.route.js";
+
+import serviceRouter from "./routes/service.route.js";
 // تحديد المسار الحالي (لخدمة ملفات الرفع)
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -39,9 +45,15 @@ const initAPP = (app) => {
   app.use('/api/expertProfiles', expertProfileRouter);
 
   app.use('/api', uploadRouter);
+  
   app.use('/auth', authRouter);  // ✅ مهم: إضافة مسار auth
 
+app.use("/api", customerRoutes);
+
+app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
   console.log('✅ App initialized successfully');
+app.use("/api/services", serviceRouter);
 };
 
 export default initAPP;

@@ -7,9 +7,12 @@ import {
   listExpertProfiles,
   approveExpertProfile,
   rejectExpertProfile,
+  createDraftFromApproved,
+  updateMyDraft,
+  submitDraftForReview,
 } from "../controllers/expertProfile.controller.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
-import { auth } from "../middleware/auth.js"; // ✅ ميدلوير التحقق من التوكن
+import { auth } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -25,8 +28,13 @@ router.post("/", auth("EXPERT"), createExpertProfile); // إنشاء بروفا�
 router.get("/me", auth("EXPERT"), getMyExpertProfile); // عرض بروفايله الشخصي
 router.put("/:profileId", auth("EXPERT"), updateMyExpertProfile); // تحديث البروفايل (طالما "pending")
 
+// ===== ✏️ Draft profile endpoints (EXPERT only) =====
+router.post("/draft", auth("EXPERT"), createDraftFromApproved); // إنشاء نسخة Draft
+router.put("/draft/:draftId", auth("EXPERT"), updateMyDraft); // حفظ التعديلات على الـ Draft
+router.post("/draft/:draftId/submit", auth("EXPERT"), submitDraftForReview); // إرسال للمراجعة
+
 // ===== 🛡️ Admin endpoints =====
-router.get("/", auth("ADMIN"), listExpertProfiles); // عرض جميع البروفايلات (مع ?status=pending)
+router.get("/", auth("ADMIN"), listExpertProfiles); // عرض جميع البروفايلات
 router.put("/:id/approve", auth("ADMIN"), approveExpertProfile); // الموافقة
 router.put("/:id/reject", auth("ADMIN"), rejectExpertProfile); // الرفض
 

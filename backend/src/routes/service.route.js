@@ -1,0 +1,242 @@
+import { Router } from "express";
+import mongoose from "mongoose";
+import Service from "../models/expert/service.model.js";
+import { auth } from "../middleware/auth.js";
+
+const router = Router();
+
+/* =====================================================
+   🟢 إنشاء خدمة جديدة
+   ===================================================== */
+router.post("/", auth(), async (req, res) => {
+  try {
+    console.log("🔹 Route hit:", req.method, req.originalUrl);
+    const expertId = new mongoose.Types.ObjectId(req.user.id);
+    const body = req.body || {};
+
+    const doc = await Service.create({ ...body, expert: expertId });
+    console.log("✅ Service created:", doc._id);
+
+    res.status(201).json({ service: doc });
+  } catch (e) {
+    console.error("❌ Error creating service:", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/* =====================================================
+   🟢 الحصول على جميع الخدمات الخاصة بالخبير
+   ===================================================== */
+router.get("/me", auth(), async (req, res) => {
+  console.log("🔹 Route hit:", req.method, req.originalUrl);
+  try {
+    const expertId = new mongoose.Types.ObjectId(req.user.id);
+    const { status, published, page = 1, limit = 20, q } = req.query;
+
+    const filter = { expert: expertId };
+    if (status) filter.status = status; // ACTIVE / ARCHIVED
+    if (published === "true") filter.isPublished = true;
+    if (published === "false") filter.isPublished = false;
+
+    let query = Service.find(filter);
+    if (q) query = query.find({ $text: { $search: q } });
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const items = await query.sort({ updatedAt: -1 }).skip(skip).limit(Number(limit));
+    const total = await Service.countDocuments(filter);
+
+    console.log("✅ Services found:", items.length);
+    res.json({ items, total, page: Number(page), limit: Number(limit) });
+  } catch (e) {
+    console.error("❌ Fetch error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* =====================================================
+   🟢 تعديل خدمة موجودة
+   ===================================================== */
+router.put("/:id", auth(), async (req, res) => {
+  console.log("🔹 Route hit:", req.method, req.originalUrl);
+  try {
+    const { id } = req.params;
+    const updated = await Service.findOneAndUpdate(
+      { _id: id, expert: req.user.id, status: "ACTIVE" },
+      req.body,
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ error: "Not found" });
+
+    console.log("✅ Service updated:", updated._id);
+    res.json({ service: updated });
+  } catch (e) {
+    console.error("❌ Update error:", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/* =====================================================
+   🟢 نشر أو إخفاء خدمة (Toggle Publish)
+   ===================================================== */
+router.patch("/:id/publish", auth(), async (req, res) => {
+  console.log("🔹 Route hit:", req.method, req.originalUrl);
+  try {
+    const { id } = req.params;
+    const { isPublished } = req.body;
+
+    const updated = await Service.findOneAndUpdate(
+      { _id: id, expert: req.user.id, status: "ACTIVE" },
+      { isPublished: !!isPublished },
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ error: "Not found" });
+
+    console.log("✅ Service publish toggled:", updated._id);
+    res.json({ service: updated });
+  } catch (e) {
+    console.error("❌ Publish toggle error:", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/* =====================================================
+   🟢 أرشفة خدمة (إخفاؤها من المتجر)
+   ===================================================== */
+router.delete("/:id", auth(), async (req, res) => {
+  console.log("🔹 Route hit:", req.method, req.originalUrl);
+  try {
+    const { id } = req.params;
+
+    const updated = await Service.findOneAndUpdate(
+      { _id: id, expert: req.user.id, status: "ACTIVE" },
+      { status: "ARCHIVED", isPublished: false },
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ error: "Not found" });
+
+    console.log("✅ Service archived:", updated._id);
+    res.json({ service: updated });
+  } catch (e) {
+    console.error("❌ Archive error:", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/* =====================================================
+   🟢 فك الأرشفة (إرجاع الخدمة من ARCHIVED إلى ACTIVE)
+   ===================================================== */
+router.patch("/:id/unarchive", auth(), async (req, res) => {
+  console.log("🔹 Route hit:", req.method, req.originalUrl);
+  try {
+    const { id } = req.params;
+
+    // ✅ تحديث الخدمة من ARCHIVED إلى ACTIVE
+    const updated = await Service.findOneAndUpdate(
+      { _id: id, expert: req.user.id, status: "ARCHIVED" },
+      { status: "ACTIVE", isPublished: false },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: "Archived service not found" });
+    }
+
+    console.log("✅ Service unarchived:", updated._id);
+    res.json({ message: "Service restored successfully", service: updated });
+  } catch (e) {
+    console.error("❌ Unarchive error:", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+
+/* =====================================================
+   🟢 إحصائيات مختصرة للخبير
+   ===================================================== */
+router.get("/me/stats", auth(), async (req, res) => {
+  console.log("🔹 Route hit:", req.method, req.originalUrl);
+  try {
+    const expert = req.user.id;
+
+    const [total, active, published, archived] = await Promise.all([
+      Service.countDocuments({ expert }),
+      Service.countDocuments({ expert, status: "ACTIVE" }),
+      Service.countDocuments({ expert, isPublished: true, status: "ACTIVE" }),
+      Service.countDocuments({ expert, status: "ARCHIVED" }),
+    ]);
+
+    console.log("✅ Stats calculated:", { total, active, published, archived });
+    res.json({ total, active, published, archived });
+  } catch (e) {
+    console.error("❌ Stats error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* =====================================================
+   🟢 استنساخ خدمة (Duplicate)
+   ===================================================== */
+router.post("/:id/duplicate", auth(), async (req, res) => {
+  console.log("🔹 Route hit:", req.method, req.originalUrl);
+  try {
+    const { id } = req.params;
+    const original = await Service.findOne({ _id: id, expert: req.user.id });
+
+    if (!original) return res.status(404).json({ error: "Not found" });
+
+    const copy = original.toObject();
+    delete copy._id;
+    copy.title = `${copy.title} (Copy)`;
+    copy.isPublished = false;
+    copy.status = "ACTIVE";
+    copy.createdAt = new Date();
+    copy.updatedAt = new Date();
+
+    const newService = await Service.create(copy);
+
+    console.log("✅ Service duplicated:", newService._id);
+    res.status(201).json({ service: newService });
+  } catch (e) {
+    console.error("❌ Duplicate error:", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ✅ تقييم خدمة
+router.post("/:id/rate", auth(), async (req, res) => {
+  try {
+    const { rating } = req.body;
+    const userId = req.user.id;
+    const service = await Service.findById(req.params.id);
+    if (!service) return res.status(404).json({ message: "Service not found" });
+
+    if (rating < 1 || rating > 5)
+      return res.status(400).json({ message: "Rating must be between 1 and 5" });
+
+    // 🔹 تحقق إذا المستخدم قيّم من قبل
+    const existing = service.ratings.find(r => r.userId.toString() === userId);
+    if (existing) {
+      existing.value = rating; // تحديث تقييمه القديم
+    } else {
+      service.ratings.push({ userId, value: rating });
+      service.ratingCount = service.ratings.length;
+    }
+
+    // 🔹 حساب المتوسط الجديد
+    const total = service.ratings.reduce((sum, r) => sum + r.value, 0);
+    service.ratingAvg = total / service.ratingCount;
+
+    await service.save();
+    res.json({ message: "Rating updated successfully", ratingAvg: service.ratingAvg });
+  } catch (err) {
+    console.error("❌ Rating error:", err);
+    res.status(500).json({ message: "Failed to update rating", error: err.message });
+  }
+});
+
+
+export default router;
