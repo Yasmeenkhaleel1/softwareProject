@@ -11,7 +11,6 @@ import 'pages/change_password_page.dart';
 import 'pages/expert_profile_page.dart';
 import 'pages/expert_dashboard_page.dart';
 import 'pages/waiting_approval_page.dart';
-import 'pages/expert_profile_view.dart';
 import 'pages/verify_code_page.dart';
 import 'pages/customer_profile_page.dart';
 import 'pages/customer_dashboard_page.dart';
@@ -185,11 +184,10 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
         '/change-password': (context) => const ChangePasswordPage(),
         '/expert_profile': (context) => const ExpertProfilePage(),
         '/waiting_approval': (_) => const WaitingApprovalPage(),
-        '/expert_dashboard': (context) => const ExpertDashboardPage(),
-        '/expert_profile_view': (context) => const ExpertProfileViewPage(),
+        '/expert_dashboard_page': (context) => const ExpertDashboardPage(),
         '/verify-code': (context) => const VerifyCodePage(email: ''),
-        '/customer_dashboard': (context) => const CustomerProfilePage(),
-        '/admin_dashboard': (context) => const AdminDashboardPage(),
+         '/customer_dashboard_page': (context) =>  CustomerHomePage(),
+        '/admin_dashboard_page': (context) => const AdminDashboardPage(),
       },
     );
   }

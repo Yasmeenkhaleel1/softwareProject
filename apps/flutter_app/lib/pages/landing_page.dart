@@ -60,7 +60,10 @@ class _LandingPageState extends State<LandingPage> {
       SnackBar(content: Text(msg), backgroundColor: color),
     );
   }
-
+// ✅ انتقال الأدمن للوحة التحكم
+void _handleAdminDashboard() {
+  Navigator.pushNamed(context, '/admin_dashboard_page');
+}
   // ✅ فحص موافقة الأدمن للخبير عند الضغط على Dashboard
   Future<void> _handleExpertDashboard() async {
     setState(() => loading = true);
@@ -78,7 +81,7 @@ class _LandingPageState extends State<LandingPage> {
         final approved = data['user']['isApproved'] == true;
 
         if (approved) {
-          Navigator.pushNamed(context, '/expert_dashboard_bage');
+          Navigator.pushNamed(context, '/expert_dashboard_page');
         } else {
           _showSnack('⏳ Your profile is still under review by the admin.');
         }
@@ -286,18 +289,18 @@ if (widget.isLoggedIn)
 
                               // 🛡️ الأدمن
                               else if (role == "ADMIN") ...[
-                                _buildButton(
-                                  label: "Admin Dashboard",
-                                  color: Colors.orangeAccent,
-                                  onPressed: () => Navigator.pushNamed(
-                                      context, '/admin_dashboard_bage'),
-                                ),
-                                _buildButton(
-                                  label: "Logout",
-                                  color: Colors.redAccent,
-                                  onPressed: widget.onLogout,
-                                ),
+                              _buildButton(
+                               label: "Admin Dashboard",
+                               color: Colors.orangeAccent,
+                               onPressed: _handleAdminDashboard,
+                             ),
+                              _buildButton(
+                               label: "Logout",
+                               color: Colors.redAccent,
+                               onPressed: widget.onLogout,
+                              ),
                               ],
+
                             ],
                           ),
                         ],

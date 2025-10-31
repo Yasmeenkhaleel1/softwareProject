@@ -30,7 +30,7 @@ const expertProfileSchema = new mongoose.Schema(
     // approval workflow
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["draft","pending", "approved", "rejected","archived"],
       default: "pending",
       index: true,
     },
