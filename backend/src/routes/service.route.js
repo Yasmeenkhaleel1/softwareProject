@@ -25,7 +25,7 @@ router.post("/", auth(), async (req, res) => {
 });
 
 /* =====================================================
-   🟢 الحصول على جميع الخدمات الخاصة بالخبير
+   🟢 الحصول على جميع الخدمات الخاصة بالخبير (مع bookingsCount)
    ===================================================== */
 router.get("/me", auth(), async (req, res) => {
   console.log("🔹 Route hit:", req.method, req.originalUrl);
@@ -33,18 +33,55 @@ router.get("/me", auth(), async (req, res) => {
     const expertId = new mongoose.Types.ObjectId(req.user.id);
     const { status, published, page = 1, limit = 20, q } = req.query;
 
-    const filter = { expert: expertId };
-    if (status) filter.status = status; // ACTIVE / ARCHIVED
-    if (published === "true") filter.isPublished = true;
-    if (published === "false") filter.isPublished = false;
+    const match = { expert: expertId };
+    if (status) match.status = status;
+    if (published === "true") match.isPublished = true;
+    if (published === "false") match.isPublished = false;
 
-    let query = Service.find(filter);
-    if (q) query = query.find({ $text: { $search: q } });
+    if (q) {
+      match.$text = { $search: q };
+    }
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const items = await query.sort({ updatedAt: -1 }).skip(skip).limit(Number(limit));
-    const total = await Service.countDocuments(filter);
+    const items = await Service.aggregate([
+      { $match: match },
+      { $sort: { updatedAt: -1 } },
+      { $skip: skip },
+      { $limit: Number(limit) },
+
+      // 🧠 ادمج الخدمات بالحجوزات
+      {
+        $lookup: {
+          from: "bookings",
+          let: { serviceId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$service", "$$serviceId"] },
+                status: { $in: ["CONFIRMED", "IN_PROGRESS", "COMPLETED"] }
+              }
+            },
+            { $count: "count" }
+          ],
+          as: "bk"
+        }
+      },
+
+      // 🧮 احسب العدد أو صفر
+      {
+        $addFields: {
+          bookingsCount: {
+            $ifNull: [{ $arrayElemAt: ["$bk.count", 0] }, 0]
+          }
+        }
+      },
+
+      // 🚮 احذف الحقل الوسيط
+      { $project: { bk: 0 } }
+    ]);
+
+    const total = await Service.countDocuments(match);
 
     console.log("✅ Services found:", items.length);
     res.json({ items, total, page: Number(page), limit: Number(limit) });
@@ -53,6 +90,7 @@ router.get("/me", auth(), async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
 
 /* =====================================================
    🟢 تعديل خدمة موجودة

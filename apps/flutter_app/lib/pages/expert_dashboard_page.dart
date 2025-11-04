@@ -8,6 +8,7 @@ import '../widgets/stat_card.dart';
 import 'edit_expert_profile_page.dart';
 import 'view_expert_profile_page.dart';
 import 'my_services_page.dart';
+import 'my_booking_tab.dart';
 
 class ExpertDashboardPage extends StatefulWidget {
   const ExpertDashboardPage({super.key});
@@ -19,7 +20,7 @@ class ExpertDashboardPage extends StatefulWidget {
 class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   static const baseUrl = "http://localhost:5000";
 
-  int _selected = 7;
+  int _selected = -1;
 
   bool _loadingMe = true;
   Map<String, dynamic>? _me; // { user, profile, approvedProfile, draftProfile, pendingProfile }
@@ -230,12 +231,39 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
 
     final sidebar = ExpertSidebar(
       selectedIndex: _selected,
-      onSelected: (i) {
-        setState(() => _selected = i);
-        if (i == 5) {
-          Navigator.popUntil(context, ModalRoute.withName('/'));
-        }
-      },
+    onSelected: (i) {
+  Navigator.pop(context); // إغلاق drawer إن وجد
+
+  if (i == 0) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ViewExpertProfilePage()),
+    ).then((_) {
+      setState(() => _selected = -1); // ✅ عند الرجوع
+    });
+  } else if (i == 1) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyServicesPage()),
+    ).then((_) {
+      setState(() => _selected = -1); // ✅ عند الرجوع
+    });
+  } else if (i == 2) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyBookingTab()),
+    ).then((_) {
+      setState(() => _selected = -1); // ✅ عند الرجوع
+    });
+  } else if (i == 5) {
+    Navigator.popUntil(context, ModalRoute.withName('/'));
+  }
+
+  setState(() => _selected = i);
+},
+
+
+
     );
 
     // ====== اختيارات العرض ======
@@ -525,42 +553,9 @@ class _SelectedSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (index == 0) {
-      Future.microtask(() {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ViewExpertProfilePage()),
-        );
-      });
-      return const SizedBox.shrink();
-    }
-
- if (index == 1) {
-      // ✅ افتح صفحة My Services مستقلّة
-      Future.microtask(() {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MyServicesPage()),
-        );
-      });
-      return const SizedBox.shrink();
-    }
-
-    final titles = ['My Profile', 'My Services', 'My Bookings', 'Messages', 'Wallet', 'Logout'];
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Text(
-        'Section: ${titles[index]} (placeholder)',
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF0F172A)),
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }
+
 
 

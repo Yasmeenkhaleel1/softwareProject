@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class ExpertSidebar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final Color background; // ✅ أضفنا المتغير
 
   const ExpertSidebar({
     super.key,
     required this.selectedIndex,
     required this.onSelected,
+    this.background = const Color(0xFF62C6D9), // ✅ قيمة افتراضية
   });
 
   @override
@@ -24,7 +26,7 @@ class ExpertSidebar extends StatelessWidget {
     return Container(
       width: 250,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: background, // ✅ استخدم لون الخلفية
         border: Border(
           right: BorderSide(color: Colors.grey.shade200),
         ),
@@ -36,16 +38,19 @@ class ExpertSidebar extends StatelessWidget {
         itemBuilder: (context, i) {
           final active = selectedIndex == i;
           return ListTile(
-            leading: Icon(items[i].icon,
-                color: active ? const Color(0xFF62C6D9) : Colors.grey[700]),
+            leading: Icon(
+              items[i].icon,
+              color: active ? Colors.white : Colors.white.withOpacity(.7),
+            ),
             title: Text(
               items[i].label,
               style: TextStyle(
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                color: active ? const Color(0xFF0F172A) : Colors.grey[800],
-            )),
+                color: active ? Colors.white : Colors.white.withOpacity(.9),
+              ),
+            ),
             selected: active,
-            selectedTileColor: const Color(0x1A62C6D9),
+            selectedTileColor: Colors.white.withOpacity(.18), // ✅ لمسة احترافية
             onTap: () => onSelected(i),
           );
         },

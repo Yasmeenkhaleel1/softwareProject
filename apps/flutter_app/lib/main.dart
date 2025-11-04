@@ -3,6 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'package:provider/provider.dart';
+import 'providers/bookings_provider.dart';
+
 // ✅ الصفحات
 import 'pages/landing_page.dart';
 import 'pages/login_page.dart';
@@ -18,7 +21,14 @@ import 'pages/admin_dashboard_page.dart';
 import 'services/auth_service.dart';
 
 void main() {
-  runApp(const LostTreasuresApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => BookingsProvider()),
+      ],
+      child: const LostTreasuresApp(),
+    ),
+  );
 }
 
 class LostTreasuresApp extends StatefulWidget {
