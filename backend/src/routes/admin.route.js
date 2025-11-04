@@ -9,6 +9,9 @@ import dotenv from "dotenv";
 import User from "../models/user/user.model.js";
 import Notification from "../models/notification.model.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
+import Booking from "../models/booking.model.js";
+import Service from "../models/expert/service.model.js";
+
 
 dotenv.config();
 const router = Router();
@@ -58,9 +61,9 @@ async function sendExpertStatusEmail(user, approved, reason = "") {
 /* =========================
    📊 إحصائيات لوحة التحكم (Dashboard)
    ========================= */
-const Booking = mongoose.model("bookings", new mongoose.Schema({}, { strict: false }));
-const Payment = mongoose.model("payments", new mongoose.Schema({}, { strict: false }));
-const Service = mongoose.model("specialists", new mongoose.Schema({}, { strict: false }));
+
+//const Payment = mongoose.model("payments", new mongoose.Schema({}, { strict: false }));
+
 
 router.get("/stats", auth(), requireRole("ADMIN"), async (req, res) => {
   try {

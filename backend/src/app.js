@@ -19,6 +19,9 @@ import notificationRoutes from "./routes/notification.route.js";
 import serviceRouter from "./routes/service.route.js";
 // تحديد المسار الحالي (لخدمة ملفات الرفع)
 
+
+import expertBookingRoute from "./routes/expert.booking.route.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -54,6 +57,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
   console.log('✅ App initialized successfully');
 app.use("/api/services", serviceRouter);
+app.use("/api", expertBookingRoute);
 };
+
 
 export default initAPP;

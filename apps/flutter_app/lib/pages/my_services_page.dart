@@ -18,6 +18,22 @@ class _MyServicesPageState extends State<MyServicesPage>
     with SingleTickerProviderStateMixin {
  static const baseUrl = "http://localhost:5000";
 
+void _showDialog(String title, String msg) {
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: Text(title),
+      content: Text(msg),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("OK"),
+        ),
+      ],
+    ),
+  );
+}
+
   late TabController _tab;
   bool _loading = true;
   List<dynamic> _items = [];
@@ -114,14 +130,12 @@ String _buildMeUrl() {
       body: jsonEncode({'isPublished': value}),
     );
     if (res.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(value ? 'Service published' : 'Service hidden')),
-      );
+     _showDialog("Success", value ? "Service published" : "Service hidden");
+
       _fetchAll();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${res.body}')),
-      );
+      _showDialog("Error", res.body);
+
     }
   }
 
@@ -132,10 +146,12 @@ String _buildMeUrl() {
     headers: {'Authorization': 'Bearer $t'},
   );
   if (res.statusCode == 200) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Service archived')));
+    _showDialog("Archived", "Service archived");
+
     _fetchAll();
   } else {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${res.body}')));
+    _showDialog("Error", res.body);
+
   }
 }
 
@@ -152,10 +168,12 @@ Future<void> _unarchive(String id) async {
   );
 
   if (res.statusCode == 200) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Service unarchived')));
+   _showDialog("Restored", "Service unarchived");
+
     _fetchAll();
   } else {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${res.body}')));
+   _showDialog("Error", res.body);
+
   }
 }
 
@@ -166,10 +184,12 @@ Future<void> _unarchive(String id) async {
       headers: {'Authorization': 'Bearer $t'},
     );
     if (res.statusCode == 201) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Service duplicated')));
+     _showDialog("Duplicated", "Service duplicated");
+
       _fetchAll();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${res.body}')));
+     _showDialog("Error", res.body);
+
     }
   }
 
