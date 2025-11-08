@@ -15,10 +15,8 @@ import 'pages/expert_profile_page.dart';
 import 'pages/expert_dashboard_page.dart';
 import 'pages/waiting_approval_page.dart';
 import 'pages/verify_code_page.dart';
-import 'pages/customer_profile_page.dart';
 import 'pages/customer_dashboard_page.dart';
 import 'pages/admin_dashboard_page.dart';
-import 'services/auth_service.dart';
 
 void main() {
   runApp(

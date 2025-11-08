@@ -16,7 +16,7 @@ class InitialPage extends StatefulWidget {
 }
 
 class _InitialPageState extends State<InitialPage> {
-  bool _checking = true;
+  final bool _checking = true;
 
   @override
   void initState() {

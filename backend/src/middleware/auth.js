@@ -1,49 +1,44 @@
-import jwt from 'jsonwebtoken';
+// src/middleware/auth.js
+import jwt from "jsonwebtoken";
 
-/**
- * auth(requiredRoles)
- * - requiredRoles: string | string[] | undefined
- *   - إذا تُركت فارغة ⇒ أي مستخدم مُسجّل مقبول.
- *   - إذا كانت سلسلة ⇒ دور واحد مطلوب.
- *   - إذا كانت مصفوفة ⇒ أي دور ضمنها مقبول.
- */
+/** Public endpoints that must bypass auth completely */
+const PUBLIC_PATHS = [
+  // GET /api/experts/:expertId/availability/slots
+  /^\/(?:api\/)?experts\/[^/]+\/availability\/slots\b/i,
+  // If you also made bookings public, keep this:
+  /^\/(?:api\/)?bookings\b/i,
+];
+
 export const auth = (requiredRoles) => (req, res, next) => {
   try {
-    // 1) تأكد من وجود secret
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ message: 'Server misconfigured: missing JWT_SECRET' });
+    // Use originalUrl so it still includes /api when mounted
+    const url = req.originalUrl || req.url || req.path || "";
+    if (PUBLIC_PATHS.some((rx) => rx.test(url))) {
+      return next();
     }
 
-    // 2) قراءة التوكن من الهيدر
-    const header = req.headers.authorization || '';
-    const [scheme, token] = header.split(' ');
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return res.status(500).json({ message: "Server misconfigured: missing JWT_SECRET" });
 
-    if (!scheme || !token || scheme.toLowerCase() !== 'bearer') {
-      return res.status(401).json({ message: 'No token' });
+    const header = req.headers.authorization || "";
+    const [scheme, token] = header.split(" ");
+    if (!scheme || !token || scheme.toLowerCase() !== "bearer") {
+      return res.status(401).json({ message: "No token" });
     }
 
-    // 3) تحقق JWT
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    // نتوقع أنك عند الإصدار تعمل: { id, email, role }
+    const payload = jwt.verify(token, secret);
     const { id, email, role } = payload || {};
-    if (!id || !role) {
-      return res.status(401).json({ message: 'Invalid token payload' });
-    }
+    if (!id || !role) return res.status(401).json({ message: "Invalid token payload" });
 
-    // ثبّت هوية المستخدم للراوترات اللاحقة
     req.user = { id, email, role };
 
-    // 4) التحقق من الأدوار إن طُلبت
     if (requiredRoles) {
-      const rolesArray = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
-      if (!rolesArray.includes(role)) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
+      const list = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
+      if (!list.includes(role)) return res.status(403).json({ message: "Forbidden" });
     }
 
-    return next();
-  } catch (e) {
-    // ممكن تكون Expired أو Invalid
-    return res.status(401).json({ message: 'Invalid or expired token' });
+    next();
+  } catch {
+    return res.status(401).json({ message: "Invalid or expired token" });
   }
 };

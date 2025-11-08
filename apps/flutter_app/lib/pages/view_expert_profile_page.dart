@@ -91,7 +91,7 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
                             ),
                           )
                         : SingleChildScrollView(
-                            child: _buildProfileLayout(activeProfile!, status),
+                            child: _buildProfileLayout(activeProfile, status),
                           ),
                   ),
                 ],
