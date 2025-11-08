@@ -1,3 +1,4 @@
+// lib/pages/customer_home_page.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -19,18 +20,22 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   static const Color primaryColor = Color(0xFF62C6D9);
   static const Color accentColor = Color(0xFF285E6E);
-  static const baseUrl = "http://localhost:5000"; // use 10.0.2.2 on Android emulator
+  static const baseUrl =
+      "http://localhost:5000"; // use 10.0.2.2 on Android emulator
 
   late AnimationController _hoverController;
 
   List<dynamic> experts = [];
   bool loadingExperts = true;
 
+  // 🔍 controller للـ search bar
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
-    _hoverController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
+    _hoverController =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
     fetchUser();
     fetchExperts();
   }
@@ -38,6 +43,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   @override
   void dispose() {
     _hoverController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -80,7 +86,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
-          experts = (data['experts'] ?? []) as List<dynamic>; // keep original objects with _id, userId
+          experts = (data['experts'] ?? []) as List<dynamic>;
           loadingExperts = false;
         });
       } else {
@@ -99,6 +105,219 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       {"name": "Eng. Rami Khaled", "specialty": "Backend Node.js", "rating": 4.7},
       {"name": "Ms. Sara Fadi", "specialty": "Marketing Strategy", "rating": 4.8},
     ];
+  }
+
+  /// 🔍 منطق البحث: اسم الخبير + التخصص + اسم الخدمة (لو موجودة)
+  void _onSearch() {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Type something to search.")),
+      );
+      return;
+    }
+
+    if (experts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No experts available to search.")),
+      );
+      return;
+    }
+
+    final results = experts.where((e) {
+      final expert = e as Map<String, dynamic>;
+      final name = (expert["name"] ?? "").toString().toLowerCase();
+      final specialization =
+          (expert["specialization"] ?? expert["specialty"] ?? "")
+              .toString()
+              .toLowerCase();
+
+      bool matches = name.contains(query) || specialization.contains(query);
+
+      // لو عندك services جوّا الـ expert (مثلاً expert["services"] List)
+      final services = expert["services"];
+      if (!matches && services is List) {
+        for (final s in services) {
+          if (s is Map<String, dynamic>) {
+            final title = (s["title"] ?? "").toString().toLowerCase();
+            if (title.contains(query)) {
+              matches = true;
+              break;
+            }
+          }
+        }
+      }
+
+      return matches;
+    }).toList();
+
+    // افتح Bottom Sheet بالنتائج
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.search,
+                            color: primaryColor, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Results for "$query"',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          "${results.length} found",
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: results.isEmpty
+                        ? const Center(
+                            child: Text(
+                              "No experts matched your search.",
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
+                        : ListView.builder(
+                            controller: scrollController,
+                            padding: const EdgeInsets.all(16),
+                            itemCount: results.length,
+                            itemBuilder: (context, index) {
+                              final expert =
+                                  results[index] as Map<String, dynamic>;
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.only(bottom: 12.0),
+                                child: _buildExpertResultTile(expert),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// بطاقة مبسطة للنتائج داخل البحث (قائمة عمودية)
+  Widget _buildExpertResultTile(Map<String, dynamic> expert) {
+    final name = (expert["name"] ?? "Unknown").toString();
+    final specialty =
+        (expert["specialization"] ?? expert["specialty"] ?? "N/A")
+            .toString();
+    final ratingVal =
+        (expert["ratingAvg"] ?? expert["rating"] ?? 0).toString();
+    final profileImageUrl = (expert["profileImageUrl"] ?? "").toString();
+
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context); // اغلق نافذة البحث
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => ExpertDetailPage(expert: expert)),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: primaryColor,
+              backgroundImage:
+                  profileImageUrl.isNotEmpty ? NetworkImage(profileImageUrl) : null,
+              child: profileImageUrl.isEmpty
+                  ? const Icon(Icons.person, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text(
+                    specialty,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.star,
+                    size: 16, color: Colors.amber),
+                const SizedBox(width: 4),
+                Text(
+                  ratingVal,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w500),
+                )
+              ],
+            )
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -210,12 +429,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   Widget _buildSearchBar() {
     return TextField(
+      controller: _searchController,
+      onSubmitted: (_) => _onSearch(),
       decoration: InputDecoration(
-        hintText: "Search by specialty, skill, or name...",
+        hintText: "Search by expert name, specialization, or service...",
         prefixIcon: const Icon(Icons.search, color: primaryColor),
         suffixIcon: IconButton(
-          icon: const Icon(Icons.filter_list, color: primaryColor),
-          onPressed: () {},
+          icon: const Icon(Icons.arrow_forward, color: primaryColor),
+          onPressed: _onSearch,
         ),
         filled: true,
         fillColor: Colors.white,
@@ -283,7 +504,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             itemCount: experts.length,
             itemBuilder: (context, index) {
               final expert = experts[index] as Map<String, dynamic>;
-              // pass the ORIGINAL object so _id and userId are preserved
               return _buildExpertCard(expert);
             },
           ),
@@ -360,7 +580,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                           backgroundColor: const Color(0xFF62C6D9),
                           minimumSize: const Size(60, 30)),
                       onPressed: () {
-                        // send the FULL expert object (contains _id)
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -432,8 +651,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                           Flexible(
                             child: Text(
                               cat["title"] as String,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600),
                             ),
                           ),
                         ],
