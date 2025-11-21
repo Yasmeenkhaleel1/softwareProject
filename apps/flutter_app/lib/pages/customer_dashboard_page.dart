@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import './customer_profile_page.dart';
 import './ExpertDetailPage.dart';
+import './chatbot_page.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -34,8 +36,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   @override
   void initState() {
     super.initState();
-    _hoverController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _hoverController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
     fetchUser();
     fetchExperts();
   }
@@ -166,8 +170,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             return Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 children: [
@@ -182,12 +185,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   ),
                   const SizedBox(height: 10),
                   Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: Row(
                       children: [
-                        const Icon(Icons.search,
-                            color: primaryColor, size: 20),
+                        const Icon(Icons.search, color: primaryColor, size: 20),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -201,8 +202,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                         ),
                         Text(
                           "${results.length} found",
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 12),
+                          style: const TextStyle(color: Colors.grey, fontSize: 12),
                         ),
                       ],
                     ),
@@ -245,8 +245,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   Widget _buildExpertResultTile(Map<String, dynamic> expert) {
     final name = (expert["name"] ?? "Unknown").toString();
     final specialty =
-        (expert["specialization"] ?? expert["specialty"] ?? "N/A")
-            .toString();
+        (expert["specialization"] ?? expert["specialty"] ?? "N/A").toString();
     final ratingVal =
         (expert["ratingAvg"] ?? expert["rating"] ?? 0).toString();
     final profileImageUrl = (expert["profileImageUrl"] ?? "").toString();
@@ -257,7 +256,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (_) => ExpertDetailPage(expert: expert)),
+            builder: (_) => ExpertDetailPage(expert: expert),
+          ),
         );
       },
       borderRadius: BorderRadius.circular(12),
@@ -284,18 +284,21 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14)),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     specialty,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(color: Colors.grey, fontSize: 12),
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
                   ),
                 ],
               ),
@@ -304,14 +307,15 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.star,
-                    size: 16, color: Colors.amber),
+                const Icon(Icons.star, size: 16, color: Colors.amber),
                 const SizedBox(width: 4),
                 Text(
                   ratingVal,
                   style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w500),
-                )
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             )
           ],
@@ -322,17 +326,34 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   @override
   Widget build(BuildContext context) {
-    String userName = user?['name'] ?? user?['email']?.split('@')[0] ?? 'User';
+    final String userName =
+        user?['name'] ?? user?['email']?.split('@')[0] ?? 'User';
+
+    final double drawerWidth = MediaQuery.of(context).size.width * 0.35;
+    final double clampedDrawerWidth =
+        drawerWidth.clamp(320.0, 420.0); // عشان يطلع حلو على كل الشاشات
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6FBFC),
+
+      // 🔹 الشات بوت كـ endDrawer (Side Panel)
+      endDrawer: SizedBox(
+        width: clampedDrawerWidth,
+        child: const Drawer(
+          child: ChatbotPage(),
+        ),
+      ),
+
       appBar: AppBar(
         elevation: 2,
         backgroundColor: primaryColor,
         title: Text(
           "Welcome, $userName 👋",
           style: const TextStyle(
-              fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
         actions: [
           IconButton(
@@ -341,22 +362,29 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (context) => const CustomerProfilePage()),
+                  builder: (context) => const CustomerProfilePage(),
+                ),
               );
             },
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: accentColor,
-        icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-        label: const Text("Chatbot", style: TextStyle(color: Colors.white)),
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("🤖 AI Chatbot coming soon...")),
-          );
-        },
+
+      // 🔹 زر الشات بوت يفتح الـ endDrawer بدل ما يفتح صفحة جديدة
+      floatingActionButton: Builder(
+        builder: (ctx) => FloatingActionButton.extended(
+          backgroundColor: accentColor,
+          icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+          label: const Text(
+            "Chatbot",
+            style: TextStyle(color: Colors.white),
+          ),
+          onPressed: () {
+            Scaffold.of(ctx).openEndDrawer();
+          },
+        ),
       ),
+
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -481,8 +509,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       return const Center(child: CircularProgressIndicator());
     }
     if (experts.isEmpty) {
-      return const Text("No experts found right now.",
-          style: TextStyle(color: Colors.grey));
+      return const Text(
+        "No experts found right now.",
+        style: TextStyle(color: Colors.grey),
+      );
     }
 
     return Column(
@@ -534,9 +564,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             borderRadius: BorderRadius.circular(15),
             boxShadow: [
               BoxShadow(
-                  color: Colors.grey.withOpacity(0.15),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4))
+                color: Colors.grey.withOpacity(0.15),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
           child: Padding(
@@ -555,30 +586,44 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                       : null,
                 ),
                 const SizedBox(height: 10),
-                Text(name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14)),
-                Text(specialty,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  specialty,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(children: [
-                      const Icon(Icons.star, color: Colors.amber, size: 16),
-                      const SizedBox(width: 5),
-                      Text(ratingVal,
+                    Row(
+                      children: [
+                        const Icon(Icons.star,
+                            color: Colors.amber, size: 16),
+                        const SizedBox(width: 5),
+                        Text(
+                          ratingVal,
                           style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 12)),
-                    ]),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF62C6D9),
-                          minimumSize: const Size(60, 30)),
+                        backgroundColor: const Color(0xFF62C6D9),
+                        minimumSize: const Size(60, 30),
+                      ),
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -587,7 +632,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                           ),
                         );
                       },
-                      child: const Text("View", style: TextStyle(fontSize: 12)),
+                      child: const Text(
+                        "View",
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ),
                   ],
                 ),
@@ -639,7 +687,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 child: Card(
                   elevation: 1.5,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: InkWell(
                     onTap: () {},
                     child: Padding(
@@ -652,7 +701,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                             child: Text(
                               cat["title"] as String,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w600),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],

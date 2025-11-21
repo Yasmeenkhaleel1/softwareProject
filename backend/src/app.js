@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 
 // Routers
+import chatbotRoutes from "./routes/chatbot.routes.js";
 import userRouter from "./routes/user.routes.js";
 import expertProfileRouter from "./routes/expertProfile.routes.js";
 import uploadRouter from "./routes/upload.routes.js";
@@ -63,7 +64,7 @@ const initAPP = (app) => {
   // الحجز و الدفع (public)
   app.use("/api", bookingsRoutes);
   app.use("/api", paymentsRoutes);
-
+  app.use("/api", chatbotRoutes);
   console.log("✅ App initialized successfully");
 };
 

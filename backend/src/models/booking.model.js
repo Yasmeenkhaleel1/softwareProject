@@ -61,8 +61,10 @@ rescheduleBeforeHours: { type: Number, default: 24 },
 cancelBeforeHours: { type: Number, default: 24 },
 noShowPenalty: { type: Number, default: 1.0 }, // 100%
 },
+
 notes: String, // داخلية
 customerNote: String,
+meetingUrl: { type: String },
 timeline: { type: [BookingTimelineSchema], default: [] },
 },
 { timestamps: true }
