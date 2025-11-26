@@ -1,24 +1,35 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
 import 'package:provider/provider.dart';
 import 'providers/bookings_provider.dart';
 
-// ✅ الصفحات
+// ✅ الصفحات العامة
 import 'pages/landing_page.dart';
 import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
 import 'pages/change_password_page.dart';
+import 'pages/verify_code_page.dart';
+
+// ✅ صفحات الخبير
 import 'pages/expert_profile_page.dart';
 import 'pages/expert_dashboard_page.dart';
 import 'pages/waiting_approval_page.dart';
-import 'pages/verify_code_page.dart';
-import 'pages/customer_profile_page.dart';
+
+// ✅ صفحات العميل
 import 'pages/customer_dashboard_page.dart';
+import 'pages/customer_profile_page.dart';
+import 'pages/calendar_view_page.dart';
+import 'pages/ExpertDetailPage.dart'; // اسم الملف الأصلي لديك هو ExpertDetailPage.dart
+
+// ✅ صفحات الأدمن
 import 'pages/admin_dashboard_page.dart';
+
+// ✅ الخدمات
 import 'services/auth_service.dart';
+import 'config/api_config.dart';
 
 void main() {
   runApp(
@@ -43,7 +54,7 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
   bool _isLoggedIn = false;
   String? _role;
   bool _isApproved = true;
-  bool _hasProfile = true; // ✅ جديد
+  bool _hasProfile = true;
 
   @override
   void initState() {
@@ -51,7 +62,7 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
     _checkLoginStatus();
   }
 
-  // ✅ التحقق من حالة تسجيل الدخول + حالة الموافقة + هل الخبير أنشأ ملفه؟
+  // ✅ التحقق من حالة تسجيل الدخول + الموافقة + البروفايل
   Future<void> _checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
@@ -64,7 +75,7 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
       if (role == 'EXPERT') {
         try {
           final res = await http.get(
-            Uri.parse('http://localhost:5000/api/me'),
+            Uri.parse('${ApiConfig.baseUrl}/api/me'),
             headers: {'Authorization': 'Bearer $token'},
           );
 
@@ -104,7 +115,7 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    
+
     setState(() {
       _isLoggedIn = false;
       _role = null;
@@ -113,7 +124,7 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
     });
   }
 
-  // ✅ تحديد الصفحة الرئيسية بناءً على الدور وحالة الموافقة والبروفايل
+  // ✅ تحديد الصفحة الرئيسية بناءً على الدور
   Widget _getHomePage() {
     if (!_isLoggedIn) {
       return LandingPage(
@@ -125,13 +136,10 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
     switch (_role) {
       case 'EXPERT':
         if (!_hasProfile) {
-          // 🟡 خبير جديد → يملأ بروفايله أولاً
           return const ExpertProfilePage();
         } else if (!_isApproved) {
-          // 🟠 عنده بروفايل ولكن ينتظر موافقة الأدمن
           return const WaitingApprovalPage();
         } else {
-          // 🟢 خبير موافَق عليه
           return LandingPage(
             isLoggedIn: true,
             onLogout: _logout,
@@ -196,8 +204,18 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
         '/waiting_approval': (_) => const WaitingApprovalPage(),
         '/expert_dashboard_page': (context) => const ExpertDashboardPage(),
         '/verify-code': (context) => const VerifyCodePage(email: ''),
-         '/customer_dashboard_page': (context) =>  CustomerHomePage(),
+        '/customer_dashboard_page': (context) => const CustomerHomePage(),
+        '/customer_profile_page': (context) => const CustomerProfilePage(),
         '/admin_dashboard_page': (context) => const AdminDashboardPage(),
+
+        // ✅ مسارات الكستمر الجديدة
+        '/customer_calendar': (context) => const CustomerCalendarViewPage(
+              expertId: '',
+              expertName: '',
+            ),
+        '/expert_details': (context) => ExpertDetailPage(
+              expert: const {},
+            ),
       },
     );
   }

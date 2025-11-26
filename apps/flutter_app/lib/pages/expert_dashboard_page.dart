@@ -20,6 +20,10 @@ class ExpertDashboardPage extends StatefulWidget {
 class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   static const baseUrl = "http://localhost:5000";
 
+int totalServices = 0;
+int totalBookings = 0;
+int totalClients = 0;
+
   int _selected = -1;
 
   bool _loadingMe = true;
@@ -34,12 +38,34 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
     super.initState();
     _loadMe();
     _fetchNotifications();
+    _loadDashboardStats(); // ✅ أضف هذا
   }
 
   Future<String> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token') ?? '';
   }
+
+
+
+Future<void> _loadDashboardStats() async {
+  final token = await _getToken();
+  final res = await http.get(
+    Uri.parse("$baseUrl/api/expert/dashboard"),
+    headers: {'Authorization': 'Bearer $token'},
+  );
+
+  if (res.statusCode == 200) {
+    final data = jsonDecode(res.body);
+    setState(() {
+      totalServices = data['services'] ?? 0;
+      totalBookings = data['bookings'] ?? 0;
+      totalClients = data['clients'] ?? 0;
+    });
+  }
+}
+
+
 
   Future<void> _loadMe() async {
     try {
@@ -448,12 +474,13 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                                   mainAxisSpacing: 16,
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
-                                  children: const [
-                                    StatCard(title: 'Services', value: '12', icon: Icons.home_repair_service),
-                                    StatCard(title: 'Clients', value: '48', icon: Icons.group),
-                                    StatCard(title: 'Bookings', value: '19', icon: Icons.event_available),
-                                    StatCard(title: 'Wallet', value: '\$1,260', icon: Icons.account_balance_wallet),
-                                  ],
+                                  children: [
+  StatCard(title: 'Services', value: '$totalServices', icon: Icons.home_repair_service),
+  StatCard(title: 'Clients', value: '$totalClients', icon: Icons.group),
+  StatCard(title: 'Bookings', value: '$totalBookings', icon: Icons.event_available),
+  const StatCard(title: 'Wallet', value: '\$1,260', icon: Icons.account_balance_wallet),
+],
+
                                 );
                               },
                             ),

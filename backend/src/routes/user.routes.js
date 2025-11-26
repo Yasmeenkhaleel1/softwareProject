@@ -1,3 +1,4 @@
+//user.routes
 import express from "express";
 import multer from "multer";
 import userModel from "../models/user/user.model.js";

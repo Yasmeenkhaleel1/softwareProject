@@ -2,15 +2,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import './customer_profile_page.dart';
-import './ExpertDetailPage.dart'; // اضيفي صفحة الخبير هنا
+import 'customer_profile_page.dart';
+import 'ExpertDetailPage.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
 
   @override
   State<CustomerHomePage> createState() => _CustomerHomePageState();
-} 
+}
 
 class _CustomerHomePageState extends State<CustomerHomePage>
     with SingleTickerProviderStateMixin {
@@ -19,7 +19,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   static const Color primaryColor = Color(0xFF62C6D9);
   static const Color accentColor = Color(0xFF285E6E);
-  static const baseUrl = "http://localhost:5000";
+  static const baseUrl = "http://localhost:5000"; // use 10.0.2.2 on Android emulator
 
   late AnimationController _hoverController;
 
@@ -29,8 +29,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   @override
   void initState() {
     super.initState();
-    _hoverController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _hoverController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
     fetchUser();
     fetchExperts();
   }
@@ -73,14 +73,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
       final res = await http.get(
-        Uri.parse('$baseUrl/api/customers/experts'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+  Uri.parse('$baseUrl/api/public/experts'),
+  headers: {'Authorization': 'Bearer $token'},
+);
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
-          experts = data['experts'] ?? [];
+          experts = (data['experts'] ?? []) as List<dynamic>; // keep original objects with _id, userId
           loadingExperts = false;
         });
       } else {
@@ -112,7 +112,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         backgroundColor: primaryColor,
         title: Text(
           "Welcome, $userName 👋",
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
+          style: const TextStyle(
+              fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
         ),
         actions: [
           IconButton(
@@ -120,7 +121,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const CustomerProfilePage()),
+                MaterialPageRoute(
+                    builder: (context) => const CustomerProfilePage()),
               );
             },
           ),
@@ -221,7 +223,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           borderRadius: BorderRadius.circular(30),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
       ),
     );
   }
@@ -257,7 +260,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       return const Center(child: CircularProgressIndicator());
     }
     if (experts.isEmpty) {
-      return const Text("No experts found right now.", style: TextStyle(color: Colors.grey));
+      return const Text("No experts found right now.",
+          style: TextStyle(color: Colors.grey));
     }
 
     return Column(
@@ -278,12 +282,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             scrollDirection: Axis.horizontal,
             itemCount: experts.length,
             itemBuilder: (context, index) {
-              final expert = experts[index];
-              return _buildExpertCard({
-                "name": expert["name"] ?? "Unknown",
-                "specialty": expert["specialization"] ?? "N/A",
-                "rating": 4.5,
-              });
+              final expert = experts[index] as Map<String, dynamic>;
+              // pass the ORIGINAL object so _id and userId are preserved
+              return _buildExpertCard(expert);
             },
           ),
         ),
@@ -292,6 +293,13 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   }
 
   Widget _buildExpertCard(Map<String, dynamic> expert) {
+    final name = (expert["name"] ?? "Unknown").toString();
+    final specialty =
+        (expert["specialization"] ?? expert["specialty"] ?? "N/A").toString();
+    final ratingVal =
+        (expert["ratingAvg"] ?? expert["rating"] ?? 0).toString();
+    final profileImageUrl = (expert["profileImageUrl"] ?? "").toString();
+
     return MouseRegion(
       onEnter: (_) => _hoverController.forward(),
       onExit: (_) => _hoverController.reverse(),
@@ -306,10 +314,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             borderRadius: BorderRadius.circular(15),
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.15),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
+                  color: Colors.grey.withOpacity(0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4))
             ],
           ),
           child: Padding(
@@ -317,49 +324,63 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 28,
-                  backgroundColor: primaryColor,
-                  child: Icon(Icons.person, color: Colors.white),
+                  backgroundColor: const Color(0xFF62C6D9),
+                  backgroundImage: profileImageUrl.isNotEmpty
+                      ? NetworkImage(profileImageUrl)
+                      : null,
+                  child: profileImageUrl.isEmpty
+                      ? const Icon(Icons.person, color: Colors.white)
+                      : null,
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  expert["name"],
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                Text(
-                  expert["specialty"],
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(specialty,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.star, color: Colors.amber, size: 16),
-                        const SizedBox(width: 5),
-                        Text(
-                          expert["rating"].toString(),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        minimumSize: const Size(60, 30),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ExpertDetailPage(expert: expert),
-                          ),
-                        );
-                      },
-                      child: const Text("Booking", style: TextStyle(fontSize: 12)),
-                    ),
+                    Row(children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 16),
+                      const SizedBox(width: 5),
+                      Text(ratingVal,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12)),
+                    ]),
+                   ElevatedButton(
+  style: ElevatedButton.styleFrom(
+    backgroundColor: const Color(0xFF62C6D9),
+    minimumSize: const Size(60, 30),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(10),
+    ),
+  ),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExpertDetailPage(expert: expert),
+      ),
+    );
+  },
+  child: const Text(
+    "View",
+    style: TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.bold,
+      color: Colors.white, // ✅ أبيض فاقع
+    ),
+  ),
+),
+
                   ],
                 ),
               ],
@@ -409,7 +430,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 scale: 1.0,
                 child: Card(
                   elevation: 1.5,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   child: InkWell(
                     onTap: () {},
                     child: Padding(
@@ -421,7 +443,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                           Flexible(
                             child: Text(
                               cat["title"] as String,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ),
                         ],

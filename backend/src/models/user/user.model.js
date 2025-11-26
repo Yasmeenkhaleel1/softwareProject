@@ -1,3 +1,4 @@
+//user.modle 
 import mongoose from "mongoose";
 
 const roles = ["EXPERT", "CUSTOMER", "ADMIN"];

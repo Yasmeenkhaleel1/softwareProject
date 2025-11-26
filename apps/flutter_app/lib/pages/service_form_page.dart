@@ -1,3 +1,4 @@
+// ✅ نفس الاستيرادات تماماً
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -50,10 +51,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
       _duration.text = (s['durationMinutes'] ?? 60).toString();
       _description.text = s['description'] ?? '';
       _tags.text = (s['tags'] as List?)?.join(', ') ?? '';
-      final imgs = (s['images'] as List?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [];
+      final imgs = (s['images'] as List?)?.map((e) => e.toString()).toList() ?? [];
       if (imgs.isNotEmpty) {
         _imageCtrls.clear();
         _imageCtrls.addAll(imgs.map((u) => TextEditingController(text: u)));
@@ -66,59 +64,53 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     return prefs.getString('token') ?? '';
   }
 
-  /// ✅ اختيار ورفع صورة من المعرض إلى السيرفر
- Future<void> _pickAndUploadImage(int index) async {
-  try {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null) return;
-
-    final fileBytes = result.files.single.bytes;
-    final fileName = result.files.single.name;
-    final token = await _token();
-
-    final uri = Uri.parse("$baseUrl/api/upload/gallery");
-    final request = http.MultipartRequest('POST', uri)
-      ..headers['Authorization'] = 'Bearer $token';
-
-    if (fileBytes != null) {
-      // ✅ Web
-      request.files.add(http.MultipartFile.fromBytes('gallery', fileBytes, filename: fileName));
-    } else if (result.files.single.path != null) {
-      // ✅ Mobile / Desktop
-      request.files.add(await http.MultipartFile.fromPath('gallery', result.files.single.path!));
-    } else {
-      throw Exception("No file data found");
-    }
-
-    final streamedResponse = await request.send();
-    final res = await http.Response.fromStream(streamedResponse);
-
-    if (res.statusCode == 200 || res.statusCode == 201) {
-      final data = jsonDecode(res.body);
-      final imageUrl = data['files']?[0]?['url'] ?? '';
-      if (imageUrl.isNotEmpty) {
-        setState(() {
-          _imageCtrls[index].text = imageUrl;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Image uploaded successfully")),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Upload failed: ${res.body}")),
+  Future<void> _pickAndUploadImage(int index) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
       );
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Error uploading image: $e")),
-    );
-  }
-}
+      if (result == null) return;
 
+      final fileBytes = result.files.single.bytes;
+      final fileName = result.files.single.name;
+      final token = await _token();
+
+      final uri = Uri.parse("$baseUrl/api/upload/gallery");
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer $token';
+
+      if (fileBytes != null) {
+        request.files.add(http.MultipartFile.fromBytes('gallery', fileBytes, filename: fileName));
+      } else if (result.files.single.path != null) {
+        request.files.add(await http.MultipartFile.fromPath('gallery', result.files.single.path!));
+      }
+
+      final streamedResponse = await request.send();
+      final res = await http.Response.fromStream(streamedResponse);
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body);
+        final imageUrl = data['files']?[0]?['url'] ?? '';
+        if (imageUrl.isNotEmpty) {
+          setState(() => _imageCtrls[index].text = imageUrl);
+          _successMsg("✅ Image uploaded successfully");
+        }
+      } else {
+        _errorMsg("Upload failed: ${res.body}");
+      }
+    } catch (e) {
+      _errorMsg("Error uploading image: $e");
+    }
+  }
+
+  void _successMsg(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _errorMsg(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -133,15 +125,8 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
       "price": double.tryParse(_price.text) ?? 0,
       "currency": _currency.text.trim(),
       "durationMinutes": int.tryParse(_duration.text) ?? 60,
-      "tags": _tags.text
-          .split(",")
-          .map((e) => e.trim().toLowerCase())
-          .where((e) => e.isNotEmpty)
-          .toList(),
-      "images": _imageCtrls
-          .map((c) => c.text.trim())
-          .where((e) => e.isNotEmpty)
-          .toList(),
+      "tags": _tags.text.split(",").map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList(),
+      "images": _imageCtrls.map((c) => c.text.trim()).where((e) => e.isNotEmpty).toList(),
     };
 
     http.Response res;
@@ -162,77 +147,88 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
 
     setState(() => _saving = false);
     if (res.statusCode == 200 || res.statusCode == 201) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Saved successfully")));
+      _successMsg("Saved successfully");
       Navigator.pop(context, true);
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: ${res.body}")));
+      _errorMsg("Error: ${res.body}");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isEdit = widget.existing != null;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF0F2F5),
+
       appBar: AppBar(
+        elevation: 0,
         backgroundColor: const Color(0xFF62C6D9),
-        title: Text(isEdit ? "Edit Service" : "Add Service",
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          widget.existing != null ? "Edit Service" : "Add Service",
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4))
-              ],
-            ),
-            child: Column(
-              children: [
-                _tf("Title", _title, required: true),
-                _categoryDropdown(),
-                Row(
-                  children: [
-                    Expanded(
-                        child: _tf("Price", _price,
-                            keyboard: TextInputType.number, required: true)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _tf("Currency", _currency)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: _tf("Duration (min)", _duration,
-                            keyboard: TextInputType.number, required: true)),
-                  ],
-                ),
-                _tf("Tags (comma separated)", _tags),
-                _ta("Description", _description, required: true),
-                const SizedBox(height: 8),
-                _imagesBlock(),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _saving ? null : _save,
-                    style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF62C6D9)),
-                    child: Text(_saving ? 'Saving...' : 'Save'),
+
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+
+                      const SizedBox(height: 6),
+                      const Text("Service Information",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 16),
+                      
+                      _tf("Title", _title, required: true),
+                      _categoryDropdown(),
+
+                      Row(
+                        children: [
+                          Expanded(child: _tf("Price", _price, keyboard: TextInputType.number, required: true)),
+                          const SizedBox(width: 10),
+                          Expanded(child: _tf("Currency", _currency)),
+                          const SizedBox(width: 10),
+                          Expanded(child: _tf("Duration (min)", _duration, keyboard: TextInputType.number, required: true)),
+                        ],
+                      ),
+
+                      _tf("Tags (comma separated)", _tags),
+                      _ta("Description", _description, required: true),
+                      const SizedBox(height: 16),
+
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      const Text("Images", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                      _imagesBlock(),
+                      const SizedBox(height: 24),
+
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton(
+                          onPressed: _saving ? null : _save,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF62C6D9),
+                            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: Text(_saving ? 'Saving...' : 'Save', style: const TextStyle(fontSize: 16)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -245,9 +241,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
         value: _selectedCategory,
-        items: _categories
-            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-            .toList(),
+        items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
         onChanged: (val) => setState(() => _selectedCategory = val),
         decoration: InputDecoration(
           labelText: "Category",
@@ -260,16 +254,13 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     );
   }
 
-  Widget _tf(String label, TextEditingController c,
-      {TextInputType? keyboard, bool required = false}) {
+  Widget _tf(String label, TextEditingController c, {TextInputType? keyboard, bool required = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         controller: c,
         keyboardType: keyboard,
-        validator: required
-            ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
-            : null,
+        validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null : null,
         decoration: InputDecoration(
           labelText: label,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -287,9 +278,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
         controller: c,
         minLines: 4,
         maxLines: 8,
-        validator: required
-            ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
-            : null,
+        validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null : null,
         decoration: InputDecoration(
           labelText: label,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -302,38 +291,29 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
 
   Widget _imagesBlock() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Align(
-          alignment: Alignment.centerLeft,
-          child:
-              Text("Images", style: TextStyle(fontWeight: FontWeight.bold)),
-        ),
-        const SizedBox(height: 8),
         ..._imageCtrls.map((c) {
           final index = _imageCtrls.indexOf(c);
-          return Row(
-            children: [
-              Expanded(child: _tf("Image URL", c)),
-              IconButton(
-                onPressed: () => _pickAndUploadImage(index),
-                icon: const Icon(Icons.photo_library, color: Colors.blueAccent),
-              ),
-              IconButton(
-                onPressed: () {
-                  setState(() {
-                    _imageCtrls.remove(c);
-                  });
-                },
-                icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-              ),
-            ],
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(child: _tf("Image URL", c)),
+                IconButton(
+                  onPressed: () => _pickAndUploadImage(index),
+                  icon: const Icon(Icons.photo_library, color: Colors.blueAccent),
+                ),
+                IconButton(
+                  onPressed: () => setState(() => _imageCtrls.remove(c)),
+                  icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                ),
+              ],
+            ),
           );
         }),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () =>
-              setState(() => _imageCtrls.add(TextEditingController())),
+          onPressed: () => setState(() => _imageCtrls.add(TextEditingController())),
           icon: const Icon(Icons.add),
           label: const Text("Add Image"),
         )

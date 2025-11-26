@@ -225,14 +225,27 @@ export const rejectExpertProfile = async (req, res) => {
     const profile = await ExpertProfile.findById(id);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
 
+    const user = await User.findById(profile.userId).select("_id name email");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // ✅ Reject current pending profile
     profile.status = "rejected";
-    profile.rejectionReason = reason || "No reason provided";
+    profile.rejectionReason = reason || "No reason provided.";
     await profile.save();
 
-    // ✅ عند الرفض: تأكد من بقاء isApproved = false
-    await User.findByIdAndUpdate(profile.userId, { isApproved: false });
+    // ✅ Check if user still has an approved profile
+    const stillApproved = await ExpertProfile.findOne({
+      userId: user._id,
+      status: "approved"
+    });
 
-    return res.json({ message: "Expert profile rejected.", profile });
+    // ✅ Only disable expert if NO approved profile exists
+    if (!stillApproved) {
+      user.isApproved = false;
+      await user.save();
+    }
+
+    return res.json({ message: "Expert profile rejected.", user, profile });
   } catch (err) {
     console.error("rejectExpertProfile error:", err);
     return res.status(500).json({ message: "Internal server error", error: err.message });

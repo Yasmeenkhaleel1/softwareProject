@@ -11,7 +11,7 @@ import Notification from "../models/notification.model.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
 import Booking from "../models/booking.model.js";
 import Service from "../models/expert/service.model.js";
-
+import Availability from "../models/availability.model.js";
 
 dotenv.config();
 const router = Router();
@@ -143,8 +143,30 @@ router.patch("/experts/:profileId/approve", auth(), requireRole("ADMIN"), async 
 );
 
 // ثم فعّل الحالي
+// ثم فعّل الحالي
 profile.status = "approved";
 await profile.save();
+
+// 🔹 نسخ Availability القديمة (إن وجدت)
+
+
+const oldAv = await Availability.findOne({
+  userId: user._id,
+  status: "ACTIVE",
+}).lean();
+
+if (oldAv) {
+  await Availability.create({
+    expert: profile._id,
+    userId: user._id,
+    bufferMinutes: oldAv.bufferMinutes,
+    rules: oldAv.rules,
+    exceptions: oldAv.exceptions,
+    status: "DRAFT",
+    versionOf: oldAv._id,
+  });
+}
+
 
     // 🔹 الخطوة 5: تحديث المستخدم نفسه
     user.isApproved = true;
@@ -178,27 +200,27 @@ router.patch("/experts/:profileId/reject", auth(), requireRole("ADMIN"), async (
     const profile = await ExpertProfile.findById(profileId);
     if (!profile) return res.status(404).json({ message: "Profile not found" });
 
-    const user = await User.findById(profile.userId).select("_id name email");
+    const user = await User.findById(profile.userId).select("_id name email isApproved");
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // 🔹 نحدّث الحالة إلى rejected
+    // ❌ رفض هذا البروفايل فقط
     profile.status = "rejected";
     profile.rejectionReason = reason || "No reason provided.";
     await profile.save();
 
-    user.isApproved = false;
-    await user.save();
-
-    await sendExpertStatusEmail(user, false, reason);
-
-    await Notification.create({
+    // ✅ هل لا يزال لديه بروفايل approved قديم؟
+    const stillApproved = await ExpertProfile.findOne({
       userId: user._id,
-      title: "Profile Rejected ❌",
-      message: reason
-        ? `Your updated profile was rejected. Reason: ${reason}`
-        : "Your updated profile was rejected by the admin.",
-      type: "error",
+      status: "approved",
     });
+
+    // 🔒 لو مافي ولا approved → ساعتها نوقفه
+    if (!stillApproved) {
+      user.isApproved = false;
+      await user.save();
+    }
+
+    // (اختياري) تقدر ترسل إيميل / Notification هنا
 
     res.json({ message: "Expert profile rejected.", user, profile });
   } catch (e) {
@@ -206,6 +228,7 @@ router.patch("/experts/:profileId/reject", auth(), requireRole("ADMIN"), async (
     res.status(500).json({ message: "Reject failed", error: e.message });
   }
 });
+
 
 /* =========================
    👤 عرض بروفايل خبير معيّن (للأدمن)

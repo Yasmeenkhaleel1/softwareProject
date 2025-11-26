@@ -34,7 +34,8 @@ router.put("/draft/:draftId", auth("EXPERT"), updateMyDraft); // حفظ التع
 router.post("/draft/:draftId/submit", auth("EXPERT"), submitDraftForReview); // إرسال للمراجعة
 
 // ===== 🛡️ Admin endpoints =====
-router.get("/", auth("ADMIN"), listExpertProfiles); // عرض جميع البروفايلات
+router.get("/", auth("ADMIN"), listExpertProfiles); // archived hidden now
+ // عرض جميع البروفايلات
 router.put("/:id/approve", auth("ADMIN"), approveExpertProfile); // الموافقة
 router.put("/:id/reject", auth("ADMIN"), rejectExpertProfile); // الرفض
 
