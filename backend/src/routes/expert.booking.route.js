@@ -2,6 +2,8 @@
 import { Router } from "express";
 import { auth } from "../middleware/auth.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { dashboardStats } from "../controllers/expertBooking.controller.js";
+
 import {
 listBookings,
 getBooking,
@@ -30,4 +32,10 @@ router.post("/expert/bookings/:id/start", startBooking);
 router.post("/expert/bookings/:id/complete", completeBooking);
 router.post("/expert/bookings/:id/cancel", cancelBooking);
 router.post("/expert/bookings/:id/no-show", markNoShow);
+router.get("/expert/dashboard", dashboardStats);
+
+
+
+
+
 export default router;

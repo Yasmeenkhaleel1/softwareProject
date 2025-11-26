@@ -41,26 +41,86 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
     }
   }
 
-  Future<void> _action(String path, {Map<String, dynamic>? body}) async {
-    final t = await _token();
+   Future<void> _action(String path, {Map<String, dynamic>? body}) async {
+  final t = await _token();
+
+  try {
     final res = await http.post(
       Uri.parse('$baseUrl$path'),
-      headers: { 'Authorization': 'Bearer $t', 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': 'Bearer $t',
+        'Content-Type': 'application/json',
+      },
       body: jsonEncode(body ?? {}),
     );
+
+    // ⚠️ في حالة وجود خطأ (مثل تعارض المواعيد أو فشل آخر)
     if (res.statusCode >= 400) {
-      final j = jsonDecode(res.body);
-      throw Exception(j['error'] ?? 'Request failed');
+      String msg = 'Something went wrong.';
+      try {
+        final j = jsonDecode(res.body);
+        msg = j['error'] ?? msg;
+      } catch (_) {}
+
+      // 🔴 عرض Dialog واضح للخطأ
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            title: const Text(
+              "Error",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.redAccent,
+              ),
+            ),
+            content: Text(msg),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
     }
 
-    // ✅ تحديث البيانات
+    // ✅ نجاح العملية
     await _load();
 
-    // ✅ عرض Dialog نجاح
     if (mounted) {
       _showSuccessDialog();
     }
+  } catch (e) {
+    // 🛜 خطأ في الاتصال بالشبكة
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Text(
+            "Network Error",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.orangeAccent,
+            ),
+          ),
+          content: Text("Please check your internet connection.\n\nDetails: $e"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+    }
   }
+}
+
 
   // ✅ Dialog بعد تحديث الحالة
   void _showSuccessDialog() {

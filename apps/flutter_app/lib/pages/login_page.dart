@@ -1,3 +1,4 @@
+//login_page
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -46,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
         await prefs.setString('token', data['token']);
         await prefs.setString('role', data['user']['role']);
         await prefs.setString('email', data['user']['email']);
-
+        await prefs.setString('userId', data['user']['id']); 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("✅ Login successful!")),
         );
