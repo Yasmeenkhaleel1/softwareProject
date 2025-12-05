@@ -407,8 +407,8 @@ Future<void> _loadDashboardStats() async {
                                   // صورة البروفايل
                                   CircleAvatar(
                                     radius: 36,
-                                    backgroundImage: (imageUrl != null && imageUrl!.startsWith("http"))
-                                        ? NetworkImage(imageUrl!)
+                                    backgroundImage: (imageUrl != null && imageUrl.startsWith("http"))
+                                        ? NetworkImage(imageUrl)
                                         : const AssetImage('assets/images/experts.png') as ImageProvider,
                                   ),
                                   const SizedBox(width: 16),

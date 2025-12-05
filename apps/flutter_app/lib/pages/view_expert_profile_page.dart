@@ -95,7 +95,7 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
                                   // LEFT — Profile Card
                                   Expanded(
                                     flex: 3,
-                                    child: _buildLeftProfile(activeProfile!, status),
+                                    child: _buildLeftProfile(activeProfile, status),
                                   ),
                                   const SizedBox(width: 25),
                                   // RIGHT — Details Cards

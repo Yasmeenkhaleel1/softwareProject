@@ -240,7 +240,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
-        value: _selectedCategory,
+        initialValue: _selectedCategory,
         items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
         onChanged: (val) => setState(() => _selectedCategory = val),
         decoration: InputDecoration(

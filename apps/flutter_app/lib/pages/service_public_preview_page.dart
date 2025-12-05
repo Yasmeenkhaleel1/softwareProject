@@ -68,7 +68,7 @@ class _ServicePublicPreviewPageState extends State<ServicePublicPreviewPage> {
 
       // ✅ مركز الصفحة وعرض ثابت للويب فقط
       body: Center(
-        child: Container(
+        child: SizedBox(
           width: 1100,
           child: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 40),

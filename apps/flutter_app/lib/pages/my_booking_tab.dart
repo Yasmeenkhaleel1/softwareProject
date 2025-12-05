@@ -414,7 +414,7 @@ class _Filters extends StatelessWidget {
               width: 220,
               child: DropdownButtonFormField<String?>(
                 decoration: const InputDecoration(labelText: "Status"),
-                value: status,
+                initialValue: status,
                 items: const [
                   DropdownMenuItem(value: null, child: Text("All")),
                   DropdownMenuItem(value: "PENDING", child: Text("Pending")),
@@ -606,6 +606,8 @@ class _LoadingList extends StatelessWidget {
 }
 
 class ShimmerTile extends StatelessWidget {
+  const ShimmerTile({super.key});
+
   @override
   Widget build(BuildContext context) {
     final base = Colors.grey.withOpacity(0.25);

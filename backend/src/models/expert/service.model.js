@@ -3,11 +3,12 @@ import mongoose from "mongoose";
 const serviceSchema = new mongoose.Schema(
   {
     expert: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
-    },
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "ExpertProfile",
+  required: true,
+  index: true,
+},
+
     title: {
       type: String,
       required: true,

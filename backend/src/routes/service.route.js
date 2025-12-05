@@ -276,5 +276,52 @@ router.post("/:id/rate", auth(), async (req, res) => {
   }
 });
 
+/* =====================================================
+   🟢 PUBLIC SEARCH (بدون توكن) - للعميل في صفحة البحث
+   ===================================================== */
+router.get("/public/search", async (req, res) => {
+  try {
+    const { q = "", category, sort = "rating_desc" } = req.query;
+
+    const query = { 
+      isPublished: true, 
+      status: "ACTIVE" 
+    };
+
+    // 🔍 بحث نصي
+    if (q && q.trim().length > 0) {
+      query.$or = [
+        { title: { $regex: q, $options: "i" } },
+        { category: { $regex: q, $options: "i" } },
+        { description: { $regex: q, $options: "i" } }
+      ];
+    }
+
+    // 🎯 فلترة حسب التصنيف
+    if (category && category !== "All") {
+      query.category = category;
+    }
+
+    // ⭐ جلب الخِدمات مع الخبير
+    const items = await Service.find(query)
+      .populate("expert", "name specialization profileImageUrl ratingAvg")
+      .lean();
+
+    // 🔽 ترتيب النتائج
+    if (sort === "price_asc") items.sort((a, b) => a.price - b.price);
+    if (sort === "price_desc") items.sort((a, b) => b.price - a.price);
+    if (sort === "name_az") items.sort((a, b) => a.title.localeCompare(b.title));
+    if (sort === "name_za") items.sort((a, b) => b.title.localeCompare(a.title));
+    if (sort === "rating_desc") items.sort((a, b) => (b.ratingAvg || 0) - (a.ratingAvg || 0));
+
+    return res.json({
+      count: items.length,
+      items,
+    });
+  } catch (e) {
+    console.error("❌ PUBLIC SEARCH ERROR:", e);
+    return res.status(500).json({ message: "Search failed", error: e.message });
+  }
+});
 
 export default router;

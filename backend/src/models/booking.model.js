@@ -94,6 +94,12 @@ const BookingSchema = new mongoose.Schema(
       netToExpert: { type: Number, default: 0 },
       txnId: String,
     },
+customerRating: {
+  type: Number,
+  min: 1,
+  max: 5,
+  default: 1
+},
 
     policy: {
       rescheduleBeforeHours: { type: Number, default: 24 },
@@ -103,6 +109,9 @@ const BookingSchema = new mongoose.Schema(
 
     notes: String,
     customerNote: String,
+    startAt: { type: Date, required: true, index: true },
+endAt: { type: Date, required: true, index: true },
+meetingUrl: { type: String },
 
     timeline: { type: [BookingTimelineSchema], default: [] },
   },
