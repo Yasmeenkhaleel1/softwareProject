@@ -1,61 +1,71 @@
 // src/controllers/booking.controller.js
+// =============================================================
+// 📌 src/controllers/booking.controller.js
+// 🎯 Public Booking Creation (Customer → Expert)
+// =============================================================
+
 import mongoose from "mongoose";
 import Booking from "../models/booking.model.js";
 import Payment from "../models/payment.model.js";
 import Service from "../models/expert/service.model.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
 import { assertNoOverlap } from "../services/booking.service.js";
+import { sendNotificationToUser } from "../services/notificationSender.js";
+import { sendFCM } from "../utils/sendFCM.js";
+import User from "../models/user/user.model.js";
 
+// Days considered non-blocking (old bookings)
 const NON_BLOCKING = new Set(["CANCELED", "REFUNDED"]);
+
+// Unique booking code generator
 const genCode = () =>
   `BK-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Date.now()
     .toString()
     .slice(-4)}`;
 
-/**
- * 🎯 Public booking creation endpoint (for Customers)
- * POST /api/public/bookings
- */
-/**
- * 🎯 Public booking creation endpoint (for Customers)
- * POST /api/public/bookings
- */
+
+// =============================================================
+// 🎯 createBookingPublic — Main Booking Endpoint
+// POST /api/public/bookings
+// =============================================================
 export async function createBookingPublic(req, res) {
   try {
+    // ---------------------------------------------------------
+    // 1️⃣ Extract & validate inputs
+    // ---------------------------------------------------------
     const {
-      expertId,      // ExpertProfile._id
-      serviceId,     // Service._id
+      expertId,
+      serviceId,
+      customerId,
       startAt,
       endAt,
       timezone = "Asia/Hebron",
       customerNote = "",
-      customerId,    // required
-      paymentId,     // optional
+      paymentId,
     } = req.body || {};
 
-    // ✅ 1. تحقق المعطيات الأساسية
-    if (!expertId || !serviceId || !startAt || !endAt || !customerId) {
+    if (!expertId || !serviceId || !customerId || !startAt || !endAt) {
       return res.status(400).json({
-        message:
-          "expertId, serviceId, customerId, startAt, endAt are required",
+        message: "expertId, serviceId, customerId, startAt, endAt are required",
       });
     }
 
-    if (
-      !mongoose.Types.ObjectId.isValid(expertId) ||
-      !mongoose.Types.ObjectId.isValid(serviceId) ||
-      !mongoose.Types.ObjectId.isValid(customerId)
-    ) {
-      return res.status(400).json({ message: "Invalid IDs" });
+    // Validate IDs format
+    const ids = [expertId, serviceId, customerId];
+    if (ids.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+      return res.status(400).json({ message: "Invalid ID format" });
     }
 
     const start = new Date(startAt);
     const end = new Date(endAt);
+
     if (isNaN(start) || isNaN(end) || start >= end) {
-      return res.status(400).json({ message: "Invalid start/end" });
+      return res.status(400).json({ message: "Invalid start/end timestamps" });
     }
 
-    // ✅ 2. تحقق أن الخبير فعلاً Approved
+    // ---------------------------------------------------------
+    // 2️⃣ Validate Expert Profile (must be approved)
+    // ---------------------------------------------------------
     const profile = await ExpertProfile.findById(expertId)
       .select("status userId")
       .lean();
@@ -68,10 +78,12 @@ export async function createBookingPublic(req, res) {
 
     const expertUserId = profile.userId;
 
-    // ✅ 3. تحقق أن الخدمة فعلاً تابعة لهذا الخبير
+    // ---------------------------------------------------------
+    // 3️⃣ Validate Service belongs to this expert
+    // ---------------------------------------------------------
     const svc = await Service.findOne({
       _id: serviceId,
-      expert: expertUserId, // Service.expert = User._id
+      expert: expertUserId,
       isPublished: true,
       status: "ACTIVE",
     })
@@ -84,82 +96,95 @@ export async function createBookingPublic(req, res) {
       });
     }
 
-    // ✅ 4. تحقق من مدة الجلسة
-    const expectedMin = svc.durationMinutes || Math.round((end - start) / 60000);
+    // ---------------------------------------------------------
+    // 4️⃣ Validate Duration matches service rules
+    // ---------------------------------------------------------
+    const expectedMin =
+      svc.durationMinutes || Math.round((end - start) / 60000);
     const actualMin = Math.round((end - start) / 60000);
+
     if (actualMin !== expectedMin) {
       return res.status(400).json({
         message: `Invalid slot duration. Expected ${expectedMin} minutes.`,
       });
     }
 
-    // ✅ 5. 🔒 تحقق من أن اليوم والوقت متاحين حسب Availability
-    const Availability = (await import("../models/availability.model.js")).default;
+    // ---------------------------------------------------------
+    // 5️⃣ Validate Availability (Active Rules + Exceptions)
+    // ---------------------------------------------------------
+    const Availability = (await import("../models/availability.model.js"))
+      .default;
+
     const av = await Availability.findOne({
       expert: expertId,
       status: "ACTIVE",
     }).lean();
 
     if (!av) {
-      return res.status(400).json({
-        message: "Expert has not set availability yet.",
-      });
+      return res
+        .status(400)
+        .json({ message: "Expert has not configured availability yet" });
     }
 
-    const dayOfWeek = start.getUTCDay(); // 0-6
+    const dayOfWeek = start.getUTCDay();
     const activeDays = (av.rules || []).map((r) => r.dow);
+
     const dateStr = `${start.getUTCFullYear()}-${(start.getUTCMonth() + 1)
       .toString()
       .padStart(2, "0")}-${start.getUTCDate().toString().padStart(2, "0")}`;
 
-    // ❌ إذا اليوم مش ضمن الأيام المفعلة
+    // Not in weekly availability
     if (!activeDays.includes(dayOfWeek)) {
       return res.status(400).json({
-        message: "❌ This day is not available for bookings. Please choose another date.",
+        message: "This day is not available for bookings",
       });
     }
 
-    // ⚠️ تحقق من الاستثناءات (Days Off / Custom Windows)
+    // Check exceptions
     const exception = (av.exceptions || []).find((e) => e.date === dateStr);
     if (exception) {
-      if (exception.off === true) {
+      if (exception.off) {
         return res.status(400).json({
-          message: "⚠️ This date is marked as a day off by the expert.",
+          message: "This date is marked as a day off",
         });
       }
 
-      // تحقق من windows إن وُجدت
-      if (exception.windows && exception.windows.length > 0) {
+      if (exception.windows?.length > 0) {
         const toMinutes = (t) => {
           const [h, m] = t.split(":").map(Number);
           return h * 60 + m;
         };
-        const startMin = start.getUTCHours() * 60 + start.getUTCMinutes();
-        const endMin = end.getUTCHours() * 60 + end.getUTCMinutes();
 
-        const withinWindow = exception.windows.some((w) => {
+        const sMin = start.getUTCHours() * 60 + start.getUTCMinutes();
+        const eMin = end.getUTCHours() * 60 + end.getUTCMinutes();
+
+        const insideWindow = exception.windows.some((w) => {
           const ws = toMinutes(w.start);
           const we = toMinutes(w.end);
-          return startMin >= ws && endMin <= we;
+          return sMin >= ws && eMin <= we;
         });
 
-        if (!withinWindow) {
+        if (!insideWindow) {
           return res.status(400).json({
             message:
-              "⚠️ This time is outside the expert’s available windows for that day.",
+              "This time slot is outside the expert’s availability window",
           });
         }
       }
     }
 
-    // ✅ 6. تحقق من عدم وجود تعارض بالحجوزات
+    // ---------------------------------------------------------
+    // 6️⃣ Prevent double-booking (time overlap check)
+    // ---------------------------------------------------------
     await assertNoOverlap({
       expertId,
       startAt: start,
       endAt: end,
     });
 
-    // ✅ 7. منع التكرار لنفس العميل في نفس الخدمة والوقت
+    // ---------------------------------------------------------
+    // 7️⃣ Prevent duplicate booking for same user/service/time
+    // ---------------------------------------------------------
     const duplicate = await Booking.findOne({
       expert: expertId,
       customer: customerId,
@@ -170,21 +195,26 @@ export async function createBookingPublic(req, res) {
 
     if (duplicate) {
       return res.status(400).json({
-        message: "You already have a booking for this slot.",
+        message: "You already have a booking for this slot",
       });
     }
 
-    // ✅ 8. ربط الدفع إن وجد
+    // ---------------------------------------------------------
+    // 8️⃣ Load payment document (if exists)
+    // ---------------------------------------------------------
     let paymentDoc = null;
+
     if (paymentId && mongoose.Types.ObjectId.isValid(paymentId)) {
       paymentDoc = await Payment.findById(paymentId).lean();
     }
 
-    // ✅ 9. إنشاء الحجز
+    // ---------------------------------------------------------
+    // 9️⃣ Create booking
+    // ---------------------------------------------------------
     const booking = await Booking.create({
       code: genCode(),
       expert: expertId,
-      expertUserId: expertUserId,
+      expertUserId,
       customer: customerId,
       service: serviceId,
       serviceSnapshot: {
@@ -216,9 +246,9 @@ export async function createBookingPublic(req, res) {
             status: "AUTHORIZED",
             amount: paymentDoc.amount,
             currency: paymentDoc.currency,
+            txnId: paymentDoc.txnId,
             platformFee: 0,
             netToExpert: 0,
-            txnId: paymentDoc.txnId,
           }
         : {
             status: "PENDING",
@@ -229,9 +259,31 @@ export async function createBookingPublic(req, res) {
           },
     });
 
-    // ✅ 10. رجوع النتيجة
+   
+
+await sendNotificationToUser( 
+  expertUserId,
+   "📥 New Booking Received",
+    `You have a new booking request — Code: ${booking.code}`
+  );
+
+  // === إرسال إشعار Firebase Push Notification ===
+const expertUser = await User.findById(expertUserId);
+
+if (expertUser?.fcmToken) {
+  await sendFCM(
+    expertUser.fcmToken,
+    "📥 New Booking",
+    `New booking received — Code: ${booking.code}`,
+    { bookingId: booking._id.toString() }
+  );
+}
+
+    // ---------------------------------------------------------
+    // 🔟 Final Response
+    // ---------------------------------------------------------
     return res.status(201).json({
-      message: "✅ Booking created successfully.",
+      message: "Booking created successfully",
       booking,
     });
   } catch (err) {

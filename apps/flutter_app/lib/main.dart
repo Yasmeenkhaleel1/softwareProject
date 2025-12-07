@@ -1,37 +1,66 @@
 // lib/main.dart
+
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:js' as js; // ⬅ لدعم استدعاء JS في الويب
+import 'package:flutter/foundation.dart'; // ⬅ لتفعيل kIsWeb
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'providers/bookings_provider.dart';
 
-// ✅ الصفحات العامة
+// pages
 import 'pages/landing_page.dart';
 import 'pages/login_page.dart';
 import 'pages/signup_page.dart';
 import 'pages/change_password_page.dart';
 import 'pages/verify_code_page.dart';
-
-// ✅ صفحات الخبير
 import 'pages/expert_profile_page.dart';
 import 'pages/expert_dashboard_page.dart';
 import 'pages/waiting_approval_page.dart';
-
-// ✅ صفحات العميل
 import 'pages/customer_dashboard_page.dart';
 import 'pages/customer_profile_page.dart';
 import 'pages/calendar_view_page.dart';
-import 'pages/ExpertDetailPage.dart'; // اسم الملف الأصلي لديك هو ExpertDetailPage.dart
-
-// ✅ صفحات الأدمن
+import 'pages/ExpertDetailPage.dart';
 import 'pages/admin_dashboard_page.dart';
 
-// ✅ الخدمات
 import 'services/auth_service.dart';
 import 'config/api_config.dart';
+import 'pages/expert_earnings_page.dart';
+// ----------------------------------------------------------------------------
+//🔥 استقبال الإشعارات في الخلفية Background
+// ----------------------------------------------------------------------------
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("📩 Background Notification:");
+  print("➡ ${message.notification?.title} | ${message.notification?.body}");
+}
 
-void main() {
+late FlutterLocalNotificationsPlugin localNoti;
+
+// ----------------------------------------------------------------------------
+// MAIN
+// ----------------------------------------------------------------------------
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Local Notification (تجهيزها)
+  localNoti = FlutterLocalNotificationsPlugin();
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const initSettings = InitializationSettings(android: androidInit);
+  await localNoti.initialize(initSettings);
+
   runApp(
     MultiProvider(
       providers: [
@@ -60,6 +89,54 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
   void initState() {
     super.initState();
     _checkLoginStatus();
+    _initNotifications(); // ⬅ فقط لعرض الإشعار (الـ token في PushNotificationService)
+  }
+
+  // ✅ هنا فقط نجهز listener لعرض الإشعار
+  Future<void> _initNotifications() async {
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+    // فقط نطبع حالة الإذن (اختياري، لا نطلبه مرة ثانية)
+    final settings = await messaging.getNotificationSettings();
+    print("🔔 Notification settings: ${settings.authorizationStatus}");
+
+    // 📥 Foreground Notification
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print("📥 Foreground Notification Received");
+      print("➡ ${message.notification?.title}");
+      print("➡ ${message.notification?.body}");
+
+      final title = message.notification?.title ?? "Notification";
+      final body = message.notification?.body ?? "";
+
+    if (kIsWeb) {
+  try {
+    js.context.callMethod('showFlutterNotification', [
+      title,
+      body,
+    ]);
+  } catch (e) {
+    print("JS error: $e");
+  }
+}
+
+ else {
+        // 📱 Android / Windows ... الخ
+        localNoti.show(
+          0,
+          title,
+          body,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'lost_channel',
+              'Lost Treasures Notifications',
+              importance: Importance.max,
+              priority: Priority.high,
+            ),
+          ),
+        );
+      }
+    });
   }
 
   // ✅ التحقق من حالة تسجيل الدخول + الموافقة + البروفايل
@@ -216,6 +293,8 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
         '/expert_details': (context) => ExpertDetailPage(
               expert: const {},
             ),
+
+         '/expert_earnings': (context) => const ExpertEarningsPage(),
       },
     );
   }

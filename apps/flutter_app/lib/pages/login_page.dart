@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
-
+import '../services/push_notification_service.dart';
 // ✅ استيراد الصفحات
 import 'landing_page.dart';
 import 'expert_profile_page.dart';
@@ -41,6 +41,9 @@ class _LoginPageState extends State<LoginPage> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['token'] != null) {
+
+        
+
         final prefs = await SharedPreferences.getInstance();
 
         // ✅ نحفظ المعلومات الضرورية
@@ -48,6 +51,8 @@ class _LoginPageState extends State<LoginPage> {
         await prefs.setString('role', data['user']['role']);
         await prefs.setString('email', data['user']['email']);
         await prefs.setString('userId', data['user']['id']); 
+        await PushNotificationService.initFCM(); // 🔥 يسجل التوكن ويرسله للسيرفر
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("✅ Login successful!")),
         );

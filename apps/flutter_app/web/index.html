@@ -1,38 +1,173 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
 
-  <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="flutter_app">
+  <meta name="apple-mobile-web-app-title" content="Lost Treasures">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>flutter_app</title>
+  <title>Lost Treasures</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- ============================================================
+       ⭐ STRIPE PAYMENT ELEMENTS (SECURE CARD UI)
+       ============================================================ -->
+  <script src="https://js.stripe.com/v3/"></script>
+
+  <script>
+    const STRIPE_KEY = "pk_test_51SYp9sFqZeISylG0JkimZuunU3Wq71PW2bokzILfnN7QMk4ZLRgDTfSc3iTds00QYSbris2s4CySmzkoeDH0JV1X00q8triO40"; 
+
+    let stripe = null;
+    let cardElement = null;
+
+    // Flutter calls this → opens Stripe card panel → returns JSON string
+    window.openStripeCardForm = async function (clientSecret) {
+      try {
+        // Initialize stripe only once
+        if (!stripe) stripe = Stripe(STRIPE_KEY);
+        const elements = stripe.elements();
+
+        // Build floating panel (center popup)
+        let panel = document.getElementById("stripe-panel");
+        if (!panel) {
+          panel = document.createElement("div");
+          panel.id = "stripe-panel";
+          panel.style.position = "fixed";
+          panel.style.top = "50%";
+          panel.style.left = "50%";
+          panel.style.transform = "translate(-50%, -50%)";
+          panel.style.width = "380px";
+          panel.style.background = "white";
+          panel.style.padding = "20px";
+          panel.style.borderRadius = "12px";
+          panel.style.zIndex = "99999";
+          panel.style.boxShadow = "0 6px 24px rgba(0,0,0,.2)";
+          panel.style.fontFamily = "sans-serif";
+          panel.innerHTML = `
+            <h3 style="margin-top:0;margin-bottom:10px;">
+              Enter your card
+            </h3>
+            <div id="card-element"
+              style="margin:12px 0;border:1px solid #ccc;padding:10px;border-radius:8px">
+            </div>
+            <button id="card-pay-btn"
+              style="
+                margin-top:14px;
+                width:100%;
+                padding:12px;
+                background:#62C6D9;
+                color:#fff;
+                border:0;
+                border-radius:8px;
+                font-size:16px;
+                cursor:pointer;">
+              Pay
+            </button>
+          `;
+          document.body.appendChild(panel);
+        }
+
+        // mount Stripe card UI
+        if (!cardElement) {
+          cardElement = elements.create("card");
+          cardElement.mount("#card-element");
+        }
+
+        // Return a promise to Flutter → resolves JSON string
+        return await new Promise((resolve) => {
+          document.getElementById("card-pay-btn").onclick = async () => {
+            const result = await stripe.confirmCardPayment(clientSecret, {
+              payment_method: { card: cardElement }
+            });
+
+            if (result.error) {
+              resolve(JSON.stringify({ error: result.error.message }));
+              return;
+            }
+
+            // Close panel
+            document.body.removeChild(panel);
+
+            // Success
+            resolve(
+              JSON.stringify({
+                paymentIntentId: result.paymentIntent.id,
+                paymentMethodId: result.paymentIntent.payment_method,
+              })
+            );
+          };
+        });
+
+      } catch (e) {
+        return JSON.stringify({ error: e.message });
+      }
+    };
+  </script>
+  <!-- ============================================================ -->
+
 </head>
+
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+
+<!-- ============================================================
+     🔔 NOTIFICATIONS (FCM + SERVICE WORKER)
+     ============================================================ -->
+<script>
+  // 1) طلب الإذن
+  if ("Notification" in window) {
+    Notification.requestPermission().then(function (permission) {
+      console.log("🔔 Notification permission:", permission);
+    });
+  }
+
+  // 2) Flutter → Service Worker
+  window.postMessageToSW = function(message) {
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: "SHOW_NOTIFICATION",
+        title: message.title,
+        body: message.body
+      });
+    } else {
+      console.log("⚠️ No SW controller available — page not controlled yet");
+    }
+  };
+
+  // 3) إشعار عادي بدون SW
+  window.showFlutterNotification = function(title, body) {
+    if (!("Notification" in window)) {
+      alert(title + "\n" + body);
+      return;
+    }
+
+    new Notification(title || "Notification", {
+      body: body || "",
+      icon: "icons/Icon-192.png"
+    });
+  };
+
+  // 4) تسجيل Service Worker
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker
+        .register("/firebase-messaging-sw.js")
+        .then(function (reg) {
+          console.log("✅ SW registered at scope:", reg.scope);
+        })
+        .catch(function (err) {
+          console.error("❌ SW registration failed:", err);
+        });
+    });
+  }
+</script>
+
+<script src="flutter_bootstrap.js" async></script>
+
 </body>
 </html>

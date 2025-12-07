@@ -39,6 +39,11 @@ const expertProfileSchema = new mongoose.Schema(
 
     // ممكن نخزن سبب الرفض من الأدمن
     rejectionReason: { type: String, trim: true },
+
+      // 🔹 ربط الخبير مع Stripe Connect
+    stripeConnectId: { type: String, default: null },      // acct_xxx
+    stripePayoutsEnabled: { type: Boolean, default: false } // جاهز يستقبل أرباح؟
+ 
   },
   { timestamps: true }
 );

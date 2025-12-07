@@ -45,6 +45,10 @@ dependencies:
   provider: ^6.1.2
   intl: ^0.19.0
   table_calendar: ^3.0.9
+  firebase_core: ^2.32.0
+  firebase_messaging: ^14.9.4
+  flutter_local_notifications: ^17.1.2
+  carousel_slider: 4.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -69,6 +73,7 @@ flutter:
     - assets/images/landing.png
     - assets/images/landing1.png
     - assets/images/profile_placeholder.png
+    - assets/images/mentors_hero.png
 
 
   # To add assets to your application, add an assets section, like this:

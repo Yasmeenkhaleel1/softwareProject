@@ -7,7 +7,8 @@ import 'package:flutter/foundation.dart'
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '/api/api_service.dart';
-
+import 'dart:js' as js;
+import 'dart:js_util' as js_util; 
 /*───────────────────────────────────────────────────────────────
   CARD VALIDATION HELPERS
 ───────────────────────────────────────────────────────────────*/
@@ -76,13 +77,10 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
   List<dynamic> services = [];
   bool loading = true;
 
-  String _resolveBaseUrl() {
-    if (kIsWeb) return "http://localhost:5000";
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return "http://10.0.2.2:5000";
-    }
-    return "http://localhost:5000";
-  }
+ String _resolveBaseUrl() {
+  return "http://localhost:5000";
+}
+
 
   // ✅ إصلاح روابط الصور للويب
   String _fixImageUrl(String url) {
@@ -1006,10 +1004,19 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+   Future<void> _submit() async {
+    // 🔐 الدفع عبر Stripe شغال للويب فقط حالياً
+    if (!kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Stripe payment is only available on web for now."),
+        ),
+      );
+      return;
+    }
 
     final customerId = await widget.getCustomerId();
+
     if (customerId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please login to complete payment.")),
@@ -1020,87 +1027,114 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
     setState(() => _submitting = true);
 
     try {
-      // 🔹 Parse time
+      // ------------------------------------------------------
+      // 1) إنشاء الحجز بحالة PENDING
+      // ------------------------------------------------------
       final startStr = widget.slot['startAt'] as String;
-      final endStr = widget.slot['endAt'] as String;
-      final start = DateTime.parse(startStr);
-      final end = DateTime.parse(endStr);
+      final endStr   = widget.slot['endAt']   as String;
 
-      // 🔹 Parse expiry MM/YY
-      final expiry = _expiry.text.trim();
-      final parts = expiry.split('/');
-      final expMonth = parts[0];
-      final expYear = parts[1].length == 2 ? "20${parts[1]}" : parts[1];
-
-      // 1️⃣ استدعاء API الدفع
-      final payRes = await http.post(
-        Uri.parse("${widget.baseUrl}/api/public/payments/charge"),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "amount": widget.price,
-          "currency": widget.currency,
-          "cardholderName": _holderName.text.trim(),
-          "cardNumber": _cardNumber.text.trim(),
-          "expMonth": expMonth,
-          "expYear": expYear,
-          "cvv": _cvv.text.trim(),
-          "customer": customerId,
-          "expert": null,
-          "service": widget.serviceId,
-          "booking": null,
-        }),
+      final bookingRes = await ApiService.createPublicBooking(
+        expertId: widget.expertId,
+        serviceId: widget.serviceId,
+        customerId: customerId,
+        startAtIso: DateTime.parse(startStr).toUtc().toIso8601String(),
+        endAtIso:   DateTime.parse(endStr).toUtc().toIso8601String(),
+        timezone: "Asia/Hebron",
+        note: "",
       );
 
-      if (payRes.statusCode != 201) {
-        final body = jsonDecode(payRes.body);
-        throw Exception(body["message"] ?? "Payment failed");
-      }
+      final booking   = bookingRes["booking"];
+      final bookingId = booking["_id"];
 
-      final payBody = jsonDecode(payRes.body);
-      final paymentId = payBody["paymentId"] as String?;
-
-      if (paymentId == null) {
-        throw Exception("Payment authorized but id is missing");
-      }
-
-      // 2️⃣ إنشاء الحجز بحالة PENDING وربطه بالدفع
-      final bookingRes = await http.post(
-        Uri.parse("${widget.baseUrl}/api/public/bookings"),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "expertId": widget.expertId,
-          "serviceId": widget.serviceId,
-          "customerId": customerId,
-          "startAt": startStr,
-          "endAt": endStr,
-          "timezone": "Asia/Hebron",
-          "customerNote": "",
-          "paymentId": paymentId,
-        }),
+      // ------------------------------------------------------
+      // 2) إنشاء PaymentIntent في السيرفر
+      // ------------------------------------------------------
+      final intentRes = await ApiService.createStripeIntent(
+        amount:        widget.price.toDouble(),
+        currency:      widget.currency,
+        customerId:    customerId,
+        expertProfileId: widget.expertId,
+        serviceId:     widget.serviceId,
+        bookingId:     bookingId,
       );
 
-      if (bookingRes.statusCode != 201) {
-        final body = jsonDecode(bookingRes.body);
-        throw Exception(body["message"] ?? "Booking failed");
+      final clientSecret = intentRes["clientSecret"];
+      final paymentId    = intentRes["paymentId"];
+
+      if (clientSecret == null || paymentId == null) {
+        throw Exception("Missing clientSecret or paymentId from backend.");
       }
 
-      if (!mounted) return;
-
-      Navigator.of(context).pop(); // close panel
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Booking request sent. Waiting for expert confirmation."),
+      // ------------------------------------------------------
+      // 3) فتح Stripe Elements (الكرت الحقيقي على الويب)
+      //    openStripeCardForm ترجع Promise → لازم نستعمل promiseToFuture
+      // ------------------------------------------------------
+      final resultJson = await js_util.promiseToFuture<String>(
+        js.context.callMethod(
+          "openStripeCardForm",
+          [clientSecret],
         ),
       );
+
+      final result = jsonDecode(resultJson);
+
+      if (result["error"] != null) {
+        throw Exception(result["error"]);
+      }
+
+      final paymentIntentId = result["paymentIntentId"];
+      final paymentMethodId = result["paymentMethodId"];
+
+      // ------------------------------------------------------
+      // 4) تأكيد الدفع في الباكند
+      // ------------------------------------------------------
+      await ApiService.confirmStripeIntent(
+        paymentId:       paymentId,
+        paymentIntentId: paymentIntentId,
+        paymentMethodId: paymentMethodId,
+      );
+
+ // 5) SUCCESS — show dialog & close payment panel
+if (!mounted) return;
+
+// إغلاق Panel الدفع
+Navigator.of(context).pop();
+
+// عرض Dialog نجاح
+await showDialog(
+  context: context,
+  builder: (_) => AlertDialog(
+    shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12)),
+    title: const Text(
+      "Booking Requested",
+      style: TextStyle(fontWeight: FontWeight.bold),
+    ),
+    content: const Text(
+      "Your booking has been created successfully.\n"
+      "Please wait for the expert's approval.",
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text("OK"),
+      ),
+    ],
+  ),
+);
+
+
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text("Payment failed: $e")),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -1215,115 +1249,49 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
 
                 const SizedBox(height: 16),
 
-                const Text(
-                  "Card details",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: Color(0xFF285E6E),
-                  ),
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
 
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _holderName,
-                        decoration: const InputDecoration(
-                          labelText: "Name on card",
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? "Required" : null,
-                      ),
-                      const SizedBox(height: 10),
-                      TextFormField(
-                        controller: _cardNumber,
-                        decoration: const InputDecoration(
-                          labelText: "Card number",
-                          hintText: "4242 4242 4242 4242",
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                        validator: validateCardNumber,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _expiry,
-                              decoration: const InputDecoration(
-                                labelText: "Expiry",
-                                hintText: "MM/YY",
-                                border: OutlineInputBorder(),
-                              ),
-                              keyboardType: TextInputType.number,
-                              validator: validateExpiry,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _cvv,
-                              decoration: const InputDecoration(
-                                labelText: "CVV",
-                                border: OutlineInputBorder(),
-                              ),
-                              keyboardType: TextInputType.number,
-                              validator: validateCvv,
-                              obscureText: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+const Text(
+  "Secure payment",
+  style: TextStyle(
+    fontWeight: FontWeight.bold,
+    fontSize: 16,
+    color: Color(0xFF285E6E),
+  ),
+),
+
+const Text(
+  "You will enter your card details in a secure Stripe form.\n"
+  "Your card data never touches our servers.",
+  style: TextStyle(fontSize: 13, color: Colors.grey),
+),
+
+const SizedBox(height: 16),
+
+ElevatedButton.icon(
+  icon: const Icon(Icons.credit_card),
+  label: const Text(
+    "Pay with Stripe",
+    style: TextStyle(fontWeight: FontWeight.bold),
+  ),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Color(0xFF62C6D9),
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(10),
+    ),
+  ),
+  onPressed: _submitting ? null : _submit,
+),
+
               ],
             ),
           ),
         ),
 
-        // Footer Button
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: Color(0xFFE0E0E0))),
-          ),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF62C6D9),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: _submitting ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      "Pay & Request Booking",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-            ),
-          ),
-        ),
+        
+       
       ],
     );
   }
