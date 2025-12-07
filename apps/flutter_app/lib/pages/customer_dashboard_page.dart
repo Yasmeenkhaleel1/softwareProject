@@ -9,11 +9,6 @@ import 'ExpertDetailPage.dart';
 import 'customer_notifications_page.dart';
 import 'customer_messages_page.dart';
 import 'customer_help_page.dart';
-import 'package:carousel_slider/carousel_slider.dart' as cs;
-import 'package:carousel_slider/carousel_controller.dart' as cs;
-
-
-
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -29,16 +24,12 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   //////
 late PageController _expertsPageController;
 double _expertsPage = 0.0;
-final cs.CarouselController _carouselController = cs.CarouselController();
-
-
 ///////
   static const Color primaryColor = Color(0xFF62C6D9);
   static const Color accentColor = Color(0xFF285E6E);
   static const baseUrl = "http://localhost:5000";
 
   late AnimationController _hoverController;
-
 
   List<dynamic> experts = [];
   bool loadingExperts = true;
@@ -685,90 +676,64 @@ Widget build(BuildContext context) {
   }
 
   /// 🔎 عرض نتائج البحث عن الخدمات
-Widget _buildSearchResultsSection() {
-  // ====== حالة عدم وجود بحث ======
-  if (!_hasSearched && _searchResults.isEmpty) {
-    return const SizedBox.shrink();
-  }
+  Widget _buildSearchResultsSection() {
+    if (!_hasSearched && _searchResults.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-  // ====== حالة التحميل ======
-  if (_searching) {
-    return const Padding(
-      padding: EdgeInsets.only(top: 8.0),
-      child: Center(child: CircularProgressIndicator()),
+    if (_searching) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 8.0),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_searchResults.isEmpty) {
+      return Card(
+        margin: const EdgeInsets.only(top: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        elevation: 2,
+        child: const Padding(
+          padding: EdgeInsets.all(20.0),
+          child: Text(
+            "No services match your search yet.\nTry a different keyword or category.",
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          "Search results (${_searchResults.length})",
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: accentColor,
+          ),
+        ),
+        const SizedBox(height: 10),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 3.0,
+          ),
+          itemCount: _searchResults.length,
+          itemBuilder: (context, index) {
+            final item = _searchResults[index];
+            return _buildServiceSearchCard(item);
+          },
+        ),
+      ],
     );
   }
-
-  // ====== لا يوجد نتائج ======
-  if (_searchResults.isEmpty) {
-    return Card(
-      margin: const EdgeInsets.only(top: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      elevation: 2,
-      child: const Padding(
-        padding: EdgeInsets.all(20.0),
-        child: Text(
-          "No services match your search yet.\nTry a different keyword or category.",
-          style: TextStyle(color: Colors.grey),
-        ),
-      ),
-    );
-  }
-
-  // ====== نتائج البحث — Carousel Slider ======
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const SizedBox(height: 8),
-
-      Text(
-        "Search results (${_searchResults.length})",
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF285E6E),
-        ),
-      ),
-
-      const SizedBox(height: 12),
-
-      // ====== الأسهم ======
-      Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios),
-            color: const Color(0xFF62C6D9),
-            onPressed: () => _carouselController.previousPage(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.arrow_forward_ios),
-            color: const Color(0xFF62C6D9),
-            onPressed: () => _carouselController.nextPage(),
-          ),
-        ],
-      ),
-
-      const SizedBox(height: 10),
-
-      // ====== Carousel Slider ======
-     cs.CarouselSlider(
-  carouselController: _carouselController,
-  options: cs.CarouselOptions(
-
-          height: 170,
-          enableInfiniteScroll: false,
-          viewportFraction: 0.33, // يعرض 3 كروت معاً
-          enlargeCenterPage: false,
-        ),
-        items: _searchResults.map((service) {
-          return _buildSearchCard(service);
-        }).toList(),
-      ),
-    ],
-  );
-}
-
 
   Widget _buildServiceSearchCard(Map<String, dynamic> service) {
     // ====== جلب بيانات الخدمة ======
@@ -1187,125 +1152,6 @@ Widget _buildExpertCard(Map<String, dynamic> expert) {
     ),
   );
 }
-Widget _buildSearchCard(Map<String, dynamic> service) {
-  final name = service["name"] ?? "";
-  final price = service["price"] ?? 0;
-  final rating = service["ratingAvg"] ?? 0;
-  final expert = service["expert"] ?? {};
-  final expertName = expert["name"] ?? "";
-  final profilePic = expert["profileImageUrl"] ?? "";
-
-  return Container(
-    margin: const EdgeInsets.symmetric(horizontal: 8),
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF62C6D9).withOpacity(0.25),
-          blurRadius: 20,
-          offset: const Offset(0, 10),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ===== عنوان الخدمة =====
-        Text(
-          name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-            color: Color(0xFF285E6E),
-          ),
-        ),
-
-        const SizedBox(height: 6),
-
-        // ===== الخبير =====
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: Colors.white,
-              backgroundImage:
-                  profilePic != "" ? NetworkImage(profilePic) : null,
-              child: profilePic == ""
-                  ? const Icon(Icons.person, size: 16, color: Color(0xFF62C6D9))
-                  : null,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                expertName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 6),
-
-        // ===== السعر + التقييم =====
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "\$ $price",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-                color: Color(0xFF285E6E),
-              ),
-            ),
-            Row(
-              children: [
-                const Icon(Icons.star, size: 14, color: Colors.amber),
-                const SizedBox(width: 4),
-                Text(
-                  rating.toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ],
-        ),
-
-        const Spacer(),
-
-        // ===== زر Book =====
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF62C6D9),
-              minimumSize: const Size(0, 32),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () {},
-            child: const Text(
-              "Book",
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 
 
 Widget _buildCategorySection() {
@@ -1444,8 +1290,8 @@ Widget _buildCategorySection() {
 }
 
 
-}
-class ScrollReveal extends StatefulWidget {
+    }
+  class ScrollReveal extends StatefulWidget {
   final Widget child;
   final Duration delay;
 
@@ -1458,7 +1304,7 @@ class ScrollReveal extends StatefulWidget {
   @override
   State<ScrollReveal> createState() => _ScrollRevealState();
 }
-
+    
 class _ScrollRevealState extends State<ScrollReveal>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
@@ -1513,4 +1359,7 @@ class _ScrollRevealState extends State<ScrollReveal>
     );
   }
 }
+
+
+
 
