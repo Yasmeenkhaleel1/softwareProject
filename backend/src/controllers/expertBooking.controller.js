@@ -200,11 +200,11 @@ export const acceptBooking = async (req, res) => {
     booking.timeline.push({ by: "EXPERT", action: "CONFIRMED", at: new Date() });
     await booking.save();
 
-     await sendNotificationToUser(
+     /*await sendNotificationToUser(
   booking.customer,
   "✔ Booking Accepted",
   `Your booking (${booking.code}) has been accepted successfully.`
-);
+);*/
 
 
     return res.json({
@@ -245,11 +245,11 @@ export const declineBooking = async (req, res) => {
     booking.timeline.push({ by: "EXPERT", action: "DECLINED" });
     await booking.save();
 
-      await sendNotificationToUser(
+      /*await sendNotificationToUser(
       booking.customer,
       "❌ Booking Declined",
       `Your booking (${booking.code}) has been declined by the expert.`
-    );
+    );*/
 
     res.json({ success: true, message: "❌ Booking declined & payment reversed if present", booking });
 
@@ -405,6 +405,43 @@ export const overviewStats = async (req, res) => {
   res.json({ data });
 };
 
+// ===================== Set / Update Meeting Link (Zoom) =====================
+export const setMeetingLink = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const { meetingUrl, provider = "ZOOM" } = req.body || {};
+
+    if (!meetingUrl) {
+      return res.status(400).json({ error: "meetingUrl is required" });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    ensureOwnership(booking, userId);
+
+    booking.meeting = {
+      provider,
+      joinUrl: meetingUrl,
+    };
+
+    await booking.save();
+
+    return res.json({
+      success: true,
+      message: "Meeting link updated",
+      meeting: booking.meeting,
+    });
+  } catch (err) {
+    console.error("setMeetingLink error", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
 // ===== Dashboard cards =====
 export const dashboardStats = async (req, res) => {
   try {
@@ -433,3 +470,4 @@ export const dashboardStats = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+

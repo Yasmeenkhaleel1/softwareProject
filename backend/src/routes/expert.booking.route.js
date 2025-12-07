@@ -16,6 +16,7 @@ completeBooking,
 cancelBooking,
 markNoShow,
 overviewStats,
+setMeetingLink,
 } from "../controllers/expertBooking.controller.js";
 const router = Router();
 router.use(auth());
@@ -33,6 +34,7 @@ router.post("/expert/bookings/:id/complete", completeBooking);
 router.post("/expert/bookings/:id/cancel", cancelBooking);
 router.post("/expert/bookings/:id/no-show", markNoShow);
 router.get("/expert/dashboard", dashboardStats);
+router.post("/expert/bookings/:id/meeting-link", setMeetingLink);
 
 
 

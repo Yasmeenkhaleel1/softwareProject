@@ -9,6 +9,7 @@ import '../widgets/stat_card.dart';
 import '../widgets/chart_card.dart'; // للـ Bookings
 import 'admin_expert_page.dart';
 import 'admin_payments_page.dart';
+import 'admin_disputes_page.dart'; // صفحة النزاعات
 
 import 'admin_earnings_page.dart';
 class AdminDashboardPage extends StatefulWidget {
@@ -46,7 +47,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _fetchDashboardStats();
     _fetchPendingExperts();
   }
@@ -278,6 +279,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
               Tab(icon: Icon(Icons.pending_actions), text: "Experts"),
               Tab(icon: Icon(Icons.payments), text: "Payments"),
               Tab(icon: Icon(Icons.show_chart), text: "Earnings"),
+               Tab(icon: Icon(Icons.gavel_outlined), text: "Disputes"),
             ],
           ),
 
@@ -297,6 +299,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           _buildPendingExperts(),
           AdminPaymentsPage(),   // صفحة الدفع
           AdminEarningsPage(),   // صفحة الإيرادات
+          const AdminDisputesPage() 
         ],
       ),
     );

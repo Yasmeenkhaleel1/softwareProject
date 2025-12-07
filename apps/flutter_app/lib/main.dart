@@ -25,7 +25,7 @@ import 'pages/expert_dashboard_page.dart';
 import 'pages/waiting_approval_page.dart';
 import 'pages/customer_dashboard_page.dart';
 import 'pages/customer_profile_page.dart';
-import 'pages/calendar_view_page.dart';
+
 import 'pages/ExpertDetailPage.dart';
 import 'pages/admin_dashboard_page.dart';
 
@@ -285,11 +285,8 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
         '/customer_profile_page': (context) => const CustomerProfilePage(),
         '/admin_dashboard_page': (context) => const AdminDashboardPage(),
 
-        // ✅ مسارات الكستمر الجديدة
-        '/customer_calendar': (context) => const CustomerCalendarViewPage(
-              expertId: '',
-              expertName: '',
-            ),
+   
+       
         '/expert_details': (context) => ExpertDetailPage(
               expert: const {},
             ),

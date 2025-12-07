@@ -1,26 +1,29 @@
+// src/models/dispute.model.js
 import mongoose from "mongoose";
 
 const disputeSchema = new mongoose.Schema(
   {
     booking: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Bookings",
+      ref: "bookings",          // ✅ نفس اسم الموديل عندك
       required: true,
     },
     payment: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Payment",
+      ref: "payments",          // ✅ نفس اسم الموديل عندك
       required: true,
     },
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
     expert: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
 
     // نوع المشكلة
@@ -56,5 +59,9 @@ const disputeSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// فهارس إضافية لتحسين الأداء
+disputeSchema.index({ booking: 1 });
+disputeSchema.index({ payment: 1 });
 
 export default mongoose.model("Dispute", disputeSchema);

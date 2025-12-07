@@ -260,8 +260,10 @@ export async function createBookingPublic(req, res) {
     });
 
    
+   
 
-await sendNotificationToUser( 
+
+/*await sendNotificationToUser( 
   expertUserId,
    "📥 New Booking Received",
     `You have a new booking request — Code: ${booking.code}`
@@ -277,7 +279,7 @@ if (expertUser?.fcmToken) {
     `New booking received — Code: ${booking.code}`,
     { bookingId: booking._id.toString() }
   );
-}
+}*/
 
     // ---------------------------------------------------------
     // 🔟 Final Response
@@ -355,10 +357,91 @@ export async function getCustomerBookings(req, res) {
         payment: b.payment,
         customerNote: b.customerNote,
         createdAt: b.createdAt,
+
+          meeting: b.meeting,
+          review: b.review,
       })),
     });
   } catch (err) {
     console.error("getCustomerBookings error", err);
+    return res
+      .status(500)
+      .json({ message: "Server error", error: err.message });
+  }
+}
+
+/**
+ * 🎯 POST /api/customer/bookings/:id/review
+ * العميل يضيف / يعدّل تقييمه بعد إتمام الجلسة
+ */
+export async function addCustomerReview(req, res) {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const { rating, comment = "" } = req.body || {};
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res
+        .status(400)
+        .json({ message: "rating must be between 1 and 5" });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // 🔐 تأكد أن هذا هو صاحب الحجز
+    if (String(booking.customer) !== String(userId)) {
+      return res
+        .status(403)
+        .json({ message: "You can only review your own bookings" });
+    }
+
+    // ✅ فقط الحجوزات المكتملة
+    if (booking.status !== "COMPLETED") {
+      return res.status(400).json({
+        message: "You can review only COMPLETED bookings",
+      });
+    }
+
+    const now = new Date();
+
+    booking.review = {
+      rating,
+      comment,
+      createdAt: booking.review?.createdAt || now,
+      updatedAt: now,
+    };
+    await booking.save();
+
+    // 🔁 تحديث تقييم الخدمة نفسها (Service.ratingAvg)
+    const service = await Service.findById(booking.service);
+    if (service) {
+      const existing = service.ratings.find(
+        (r) => String(r.userId) === String(userId)
+      );
+      if (existing) {
+        existing.value = rating;
+      } else {
+        service.ratings.push({ userId, value: rating });
+        service.ratingCount = service.ratings.length;
+      }
+
+      const total = service.ratings.reduce((sum, r) => sum + r.value, 0);
+      service.ratingAvg = total / (service.ratingCount || 1);
+
+      await service.save();
+    }
+
+    return res.json({
+      success: true,
+      message: "Review saved successfully",
+      review: booking.review,
+      ratingAvg: service?.ratingAvg,
+    });
+  } catch (err) {
+    console.error("addCustomerReview error", err);
     return res
       .status(500)
       .json({ message: "Server error", error: err.message });
