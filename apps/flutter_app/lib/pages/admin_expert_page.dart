@@ -1,4 +1,4 @@
-//lib/pages/admin_expert_page
+// lib/pages/admin_expert_page.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -69,13 +69,12 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
         const SnackBar(content: Text("✅ Expert approved successfully")),
       );
       _fetchExpertProfile();
-    } else {
-      debugPrint("❌ Approve failed: ${res.statusCode}");
     }
   }
 
   Future<void> _rejectExpert() async {
     final reasonController = TextEditingController();
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -118,8 +117,6 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
         const SnackBar(content: Text("❌ Expert rejected")),
       );
       _fetchExpertProfile();
-    } else {
-      debugPrint("❌ Reject failed: ${res.statusCode}");
     }
   }
 
@@ -133,10 +130,16 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
       },
       child: Text(
         label,
-        style: const TextStyle(color: Colors.blueAccent, decoration: TextDecoration.underline),
+        style: const TextStyle(
+          color: Color(0xFF347C8B),
+          fontWeight: FontWeight.w600,
+          decoration: TextDecoration.underline,
+        ),
       ),
     );
   }
+
+  // ----------------------- UI DESIGN START -----------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -150,73 +153,49 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
       return const Scaffold(body: Center(child: Text("Expert not found")));
     }
 
-   final user = expert!['user'] ?? {};
-final profile = expert!['profile'] ?? {};
+    final user = expert!['user'] ?? {};
+    final profile = expert!['profile'] ?? {};
 
     final displayName = user['name'] ?? profile['name'] ?? "Unknown Expert";
-    final imageUrl = profile['profileImageUrl'] ?? "assets/images/experts.png";
+    final imageUrl = profile['profileImageUrl'] ?? "";
+
     final certificates = List<String>.from(profile['certificates'] ?? []);
     final gallery = List<String>.from(profile['gallery'] ?? []);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F6F8),
       appBar: AppBar(
+        elevation: 0,
         backgroundColor: const Color(0xFF62C6D9),
-        title: const Text("Expert Profile", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Expert Details",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
+
+      // ========================= BODY ===========================
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(26),
         child: Column(
           children: [
-            // صورة البروفايل
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 55,
-                      backgroundImage: imageUrl.startsWith("http")
-                          ? NetworkImage(imageUrl)
-                          : const AssetImage('assets/images/experts.png') as ImageProvider,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      user['email'] ?? '',
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                           displayName,
-                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-                        ),
+            _headerCard(displayName, user['email'], imageUrl),
 
-                  ],
-                ),
-              ),
-            ),
+            const SizedBox(height: 22),
 
-            const SizedBox(height: 20),
-
-            // Personal Info Card
             _infoCard(
-              "🧍‍♀️ Personal Info",
+              "Personal Information",
               [
                 _infoRow("Gender", user['gender']),
                 _infoRow("Age", user['age'].toString()),
-               _infoRow("Verified", (user['isVerified'] == true) ? "Yes" : "No"),
-               _infoRow("Approved", (user['isApproved'] == true) ? "Yes" : "No"),
-
+                _infoRow("Email Verified", user['isVerified'] == true ? "Yes" : "No"),
+                _infoRow("Admin Approved", user['isApproved'] == true ? "Yes" : "No"),
               ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
-            // Profile Info Card
             _infoCard(
-              "📋 Profile Info",
+              "Profile Info",
               [
                 _infoRow("Specialization", profile['specialization']),
                 _infoRow("Experience", "${profile['experience']} years"),
@@ -225,110 +204,196 @@ final profile = expert!['profile'] ?? {};
               ],
             ),
 
-            const SizedBox(height: 16),
-
-            // Certificates
-            if (certificates.isNotEmpty)
+            if (certificates.isNotEmpty) ...[
+              const SizedBox(height: 18),
               _infoCard(
-                "📜 Certificates",
+                "Certificates",
                 certificates.map((url) => _buildLink(url, url)).toList(),
               ),
+            ],
 
-            const SizedBox(height: 16),
+            if (gallery.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              _galleryCard(gallery),
+            ],
 
-            // Gallery
-            if (gallery.isNotEmpty)
-              _infoCard(
-                "🖼 Gallery",
-                [
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: gallery
-                        .map((g) => ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                g,
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 80),
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 26),
 
-            const SizedBox(height: 30),
+            _actionButtons(),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Action Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+  // ----------------------- HEADER CARD -----------------------------
+
+  Widget _headerCard(String name, String email, String imageUrl) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF62C6D9), Color(0xFF347C8B), Color(0xFF244C63)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          )
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 52,
+            backgroundImage: (imageUrl.isNotEmpty && imageUrl.startsWith("http"))
+                ? NetworkImage(imageUrl)
+                : const AssetImage("assets/images/experts.png") as ImageProvider,
+          ),
+          const SizedBox(width: 22),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: const Icon(Icons.check_circle, color: Colors.white),
-                  label: const Text("Approve", style: TextStyle(color: Colors.white, fontSize: 16)),
-                  onPressed: _approveExpert,
-                ),
-                const SizedBox(width: 20),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: const Icon(Icons.cancel, color: Colors.white),
-                  label: const Text("Reject", style: TextStyle(color: Colors.white, fontSize: 16)),
-                  onPressed: _rejectExpert,
-                ),
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                const SizedBox(height: 6),
+                Text(email,
+                    style: const TextStyle(
+                        fontSize: 15, color: Colors.white70)),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
+  // ----------------------- INFO CARD -----------------------------
 
   Widget _infoCard(String title, List<Widget> children) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-            const Divider(thickness: 1, height: 20),
-            ...children,
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF244C63))),
+          const SizedBox(height: 12),
+          const Divider(),
+          const SizedBox(height: 12),
+          ...children,
+        ],
       ),
     );
   }
 
-  Widget _infoRow(String title, dynamic value) {
+  Widget _infoRow(String label, dynamic value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
           Expanded(
-              flex: 3,
-              child: Text("$title:", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87))),
+            flex: 3,
+            child: Text(label,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF244C63))),
+          ),
           Expanded(
-              flex: 5,
-              child: Text(
-                "${value ?? '-'}",
-                style: const TextStyle(color: Colors.black54),
-              )),
+            flex: 5,
+            child: Text(
+              value ?? "—",
+              style: const TextStyle(color: Colors.black87),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  // ----------------------- GALLERY -----------------------------
+
+  Widget _galleryCard(List<String> gallery) {
+    return _infoCard(
+      "Gallery",
+      [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: gallery
+              .map(
+                (img) => ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    img,
+                    width: 110,
+                    height: 110,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              )
+              .toList(),
+        )
+      ],
+    );
+  }
+
+  // ----------------------- ACTION BUTTONS -----------------------------
+
+  Widget _actionButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          onPressed: _approveExpert,
+          icon: const Icon(Icons.check_circle, color: Colors.white),
+          label: const Text("Approve",
+              style: TextStyle(color: Colors.white, fontSize: 16)),
+        ),
+        const SizedBox(width: 20),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.redAccent,
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          onPressed: _rejectExpert,
+          icon: const Icon(Icons.cancel, color: Colors.white),
+          label: const Text("Reject",
+              style: TextStyle(color: Colors.white, fontSize: 16)),
+        ),
+      ],
     );
   }
 }

@@ -23,7 +23,7 @@ class ExpertSidebar extends StatelessWidget {
       _SideItem(icon: Icons.event_available, label: 'My Bookings'),
       _SideItem(icon: Icons.access_time, label: 'My Availability'), // ✅ الجديد هنا
       _SideItem(icon: Icons.chat_bubble, label: 'Messages'),
-      _SideItem(icon: Icons.account_balance_wallet, label: 'Wallet'),
+      _SideItem(icon: Icons.bar_chart, label: 'My Earnings'),
       _SideItem(icon: Icons.logout, label: 'Logout'),
     ];
 
@@ -54,20 +54,26 @@ class ExpertSidebar extends StatelessWidget {
             ),
             selected: active,
             selectedTileColor: Colors.white.withOpacity(.18),
-            onTap: () {
-              if (items[i].label == 'My Availability') {
-                // ✅ فتح صفحة My Availability
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyAvailabilityPage()),
-                ).then((_) {
-                  // بعد الرجوع، نظهر تمييز الزر
-                  onSelected(3);
-                });
-              } else {
-                onSelected(i);
-              }
-            },
+           onTap: () {
+  final label = items[i].label;
+
+  if (label == 'My Availability') {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyAvailabilityPage()),
+    ).then((_) => onSelected(3));
+  }
+
+  else if (label == 'My Earnings') {
+    Navigator.pushNamed(context, '/expert_earnings')
+        .then((_) => onSelected(i));
+  }
+
+  else {
+    onSelected(i);
+  }
+},
+
           );
         },
       ),

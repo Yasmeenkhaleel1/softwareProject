@@ -5,25 +5,59 @@ import Notification from "../models/notification.model.js";
 
 const router = Router();
 
-// ✅ جلب إشعارات المستخدم الحالي
+/* ======================================================
+   🟦 1) Get All Notifications (Latest First)
+====================================================== */
 router.get("/", auth(), async (req, res) => {
   try {
     const notifications = await Notification.find({ userId: req.user.id })
       .sort({ createdAt: -1 })
       .limit(20);
+
     res.json({ notifications });
   } catch (e) {
-    res.status(500).json({ message: "Error fetching notifications", error: e.message });
+    res.status(500).json({
+      message: "Error fetching notifications",
+      error: e.message,
+    });
   }
 });
 
-// ✅ تعليم كل الإشعارات كمقروءة
+/* ======================================================
+   🟦 2) Get Unread Count (For Badge 🔴)
+====================================================== */
+router.get("/unread-count", auth(), async (req, res) => {
+  try {
+    const count = await Notification.countDocuments({
+      userId: req.user.id,
+      isRead: false, 
+    });
+
+    res.json({ unread: count });
+  } catch (e) {
+    res.status(500).json({
+      message: "Error fetching unread count",
+      error: e.message,
+    });
+  }
+});
+
+/* ======================================================
+   🟦 3) Mark All as Read
+====================================================== */
 router.patch("/read-all", auth(), async (req, res) => {
   try {
-    await Notification.updateMany({ userId: req.user.id }, { isRead: true });
+    await Notification.updateMany(
+      { userId: req.user.id },
+      { isRead: true }
+    );
+
     res.json({ message: "All notifications marked as read" });
   } catch (e) {
-    res.status(500).json({ message: "Error updating notifications", error: e.message });
+    res.status(500).json({
+      message: "Error updating notifications",
+      error: e.message,
+    });
   }
 });
 

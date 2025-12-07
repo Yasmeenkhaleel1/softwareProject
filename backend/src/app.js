@@ -3,10 +3,12 @@ import cors from "cors";
 import mongoose from "mongoose";
 import express from "express";
 import path from "path";
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 import { fileURLToPath } from "url";
 
 // Routers
+import webhookRoute from "./routes/webhook.route.js";
+import disputeRoutes from "./routes/dispute.routes.js";
 import userRouter from "./routes/user.routes.js";
 import expertProfileRouter from "./routes/expertProfile.routes.js";
 import uploadRouter from "./routes/upload.routes.js";
@@ -23,15 +25,24 @@ import availabilityRoutes from "./routes/availability.routes.js";   // 📅 ال
 import expertAvailabilityRoutes from "./routes/expert.availability.routes.js";
 import calendarRouter from "./routes/calendar.route.js";
 import paymentRoutes from "./routes/payments.routes.js";            // 💳 الدفع العام
+import expertEarningsRoutes from "./routes/expertEarnings.route.js";
+
+
+import notifyRoutes from "./routes/notify.route.js";
+import fcmRoutes from "./routes/fcm.route.js";
+
+import publicServicesRoutes from "./routes/public.services.routes.js";
+
 
 // إعدادات المسار العام
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 // تحميل إعدادات البيئة
 dotenv.config();
 
 const initAPP = (app) => {
+  
+  app.use("/stripe", webhookRoute);
   app.use(express.json());
   app.use(cors());
 
@@ -52,9 +63,7 @@ const initAPP = (app) => {
   // ==========================
   // ✅ تعريف جميع الـ Routes
   // ==========================
-// ==========================
-// ✅ تعريف جميع الـ Routes
-// ==========================
+
 
 // 🔹 المستخدمين (User)
 app.use("/api", userRouter);
@@ -74,6 +83,9 @@ app.use("/api", customerRoutes);
 // 🔹 الخدمات (Services)
 app.use("/api/services", serviceRouter);
 
+app.use("/api", publicServicesRoutes);//serch
+
+
 // 🔹 الحجوزات العامة (Public Booking) ← يجب أن تبقى قبل expertBookingRoute
 app.use("/api", bookingPublicRoutes);
 
@@ -88,10 +100,20 @@ app.use("/api", calendarRouter);
 app.use("/api", expertAvailabilityRoutes);
 
 // 🔹 الدفع (Payments)
-app.use("/api", paymentRoutes);
+app.use("/api/payments", paymentRoutes);
+
+app.use("/api/expert/earnings", expertEarningsRoutes);
+
+// 🔹 النظام الجديد (Disputes / شكاوي الدفع)
+app.use("/api", disputeRoutes);
+
+
+app.use("/api/fcm", fcmRoutes);
 
 // 🔹 الإشعارات (Notifications)
 app.use("/api/notifications", notificationRoutes);
+
+app.use("/api/notify", notifyRoutes);
 
 // 🔹 الإدارة (Admin)
 app.use("/api/admin", adminRoutes);

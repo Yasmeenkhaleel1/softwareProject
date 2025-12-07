@@ -170,3 +170,42 @@ export async function refundPayment(req, res) {
     return res.status(500).json({ message: "Server error", error: err.message });
   }
 }
+
+// ===========================
+// 🔹 Capture Payment Endpoint
+// ===========================
+export async function capturePayment(req, res) {
+  try {
+    const { id } = req.params;
+
+    const payment = await Payment.findById(id);
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
+
+    if (payment.status !== "AUTHORIZED") {
+      return res.status(400).json({ message: "Only AUTHORIZED payments can be captured" });
+    }
+
+    payment.status = "CAPTURED";
+    payment.capturedAt = new Date();
+
+    payment.timeline.push({
+      action: "CAPTURED",
+      by: "SYSTEM",
+      at: new Date(),
+      meta: { trigger: "manual_capture" }
+    });
+
+    await payment.save();
+
+    return res.json({
+      message: "Payment captured successfully",
+      paymentId: payment._id,
+      netToExpert: payment.netToExpert,
+    });
+
+  } catch (err) {
+    console.error("capturePayment error", err);
+    return res.status(500).json({ message: err.message });
+  }
+}
+

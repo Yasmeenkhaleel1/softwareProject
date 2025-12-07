@@ -9,6 +9,9 @@ import 'edit_expert_profile_page.dart';
 import 'view_expert_profile_page.dart';
 import 'my_services_page.dart';
 import 'my_booking_tab.dart';
+import 'notifications_page.dart';
+import '../services/notifications_api.dart';
+
 
 class ExpertDashboardPage extends StatefulWidget {
   const ExpertDashboardPage({super.key});
@@ -234,25 +237,47 @@ Future<void> _loadDashboardStats() async {
       ),
       iconTheme: const IconThemeData(color: Colors.white),
       actions: [
-        Stack(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none, color: Colors.white),
-              onPressed: () => setState(() => _notifOpen = !_notifOpen),
-            ),
-            if (_notifications.any((n) => n['isRead'] == false))
-              Positioned(
-                right: 10,
-                top: 10,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+  Stack(
+    children: [
+      IconButton(
+        icon: const Icon(Icons.notifications_none, color: Colors.white),
+        onPressed: () async {
+          await NotificationsAPI.markAllAsRead();
+          setState(() => _notifOpen = !_notifOpen);
+          _fetchNotifications();
+        },
+      ),
+
+      Positioned(
+        right: 6,
+        top: 6,
+        child: FutureBuilder(
+          future: NotificationsAPI.getUnreadCount(),
+          builder: (context, snap) {
+            if (!snap.hasData || snap.data == 0) return const SizedBox();
+
+            return Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                "${snap.data}",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold
                 ),
               ),
-          ],
+            );
+          },
         ),
-      ],
+      ),
+    ],
+  ),
+],
+
     );
 
     final sidebar = ExpertSidebar(
@@ -361,21 +386,52 @@ Future<void> _loadDashboardStats() async {
                               children: [
                                 IconButton(
                                   icon: const Icon(Icons.notifications_none, color: Colors.white),
-                                  onPressed: () => setState(() => _notifOpen = !_notifOpen),
-                                ),
-                                if (_notifications.any((n) => n['isRead'] == false))
-                                  Positioned(
-                                    right: 10,
-                                    top: 10,
-                                    child: Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  ),
+                                 onPressed: () async {
+                                       // 1) علّم كل الإشعارات كمقروءة
+                                              await NotificationsAPI.markAllAsRead();
+
+                                                 // 2) أعد تحميل قائمة الإشعارات من السيرفر
+                                              await _fetchNotifications();
+
+                                          // 3) حدث الواجهة
+                                             setState(() {});
+
+                                            // 4) افتح صفحة الإشعارات
+                                             Navigator.push(
+                                                  context,
+                                             MaterialPageRoute(builder: (_) => const NotificationsPage()),
+                                                   );
+                                                },
+
+                                           ),
+                                Builder(
+  builder: (_) {
+    final unread = _notifications.where((n) => n['isRead'] == false).length;
+
+    if (unread == 0) return const SizedBox();
+
+    return Positioned(
+      right: 10,
+      top: 10,
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: const BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.circle,
+        ),
+        child: Text(
+          "$unread",
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  },
+),
+
                               ],
                             ),
                           ],

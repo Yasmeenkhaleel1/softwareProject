@@ -4,6 +4,9 @@ import Service from "../models/expert/service.model.js";
 import { nextBookingCode } from "../utils/codes.js";
 import Payment from "../models/payment.model.js";
 import { ensureOwnership } from "../utils/ownership.js"
+
+import { sendNotificationToUser } from "../services/notificationSender.js";
+
 import mongoose from "mongoose";
 import {
   assertNoOverlap,
@@ -11,6 +14,9 @@ import {
   canCancel,
 } from "../services/booking.service.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
+
+import Stripe from "stripe";
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // ✅ نستخدمها فقط عندما نحتاج ID للبروفايل الحالي
 async function getExpertProfileId(userId) {
@@ -147,107 +153,111 @@ if (existing) {
 
 // ===================== باقي العمليات =====================
 
+// ===================== ACCEPT BOOKING = CAPTURE PAYMENT =====================
+
 export const acceptBooking = async (req, res) => {
   try {
     const userId = req.user.id;
     const bookingId = req.params.id;
 
-    // ✅ 1. تحميل الحجز
     const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return res.status(404).json({ error: "Booking not found." });
-    }
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
 
     ensureOwnership(booking, userId);
 
-    // ✅ 2. لا يمكن قبول غير PENDING
     if (booking.status !== "PENDING") {
-      return res.status(400).json({
-        error: "Only PENDING bookings can be accepted.",
-      });
+      return res.status(400).json({ error: "Only PENDING bookings can be accepted." });
     }
 
-    // ✅ 3. تحقق من عدم وجود تضارب بالمواعيد
-    try {
-      await assertNoOverlap({
-        expertId: userId,
-        startAt: booking.startAt,
-        endAt: booking.endAt,
-        excludeId: booking._id,
-      });
-    } catch (e) {
-      return res.status(409).json({
-        error: e.message || "Time slot overlaps with another booking.",
-      });
-    }
-
-    // ✅ 4. تحديث حالة الحجز
-    booking.status = "CONFIRMED";
-    booking.timeline.push({ by: "EXPERT", action: "CONFIRMED", at: new Date() });
-
-    // ✅ 5. تنفيذ عملية Capture (الخصم الفعلي)
     const payment = await Payment.findOne({ booking: booking._id });
+    if (!payment) return res.status(402).json({ error: "No payment found for this booking." });
 
-    if (payment) {
-      if (payment.status === "AUTHORIZED") {
-        // 🔹 تحديث الدفع ليصبح CAPTURED
-        payment.status = "CAPTURED";
-        payment.capturedAt = new Date();
-
-        // 🔹 سجل الحدث في التايملاين (لو عندك timeline في الـ Payment)
-        if (!payment.timeline) payment.timeline = [];
-        payment.timeline.push({
-          action: "CAPTURED",
-          by: "SYSTEM",
-          at: new Date(),
-          meta: { trigger: "expert_accept" },
-        });
-
-        await payment.save();
-
-        // 🔹 تحديث بيانات الدفع داخل الحجز نفسه
-        booking.payment.status = "CAPTURED";
-        booking.payment.netToExpert = booking.payment.amount; // المبلغ أصبح جاهز للخبير
-      }
+    // 🔥 منع تكرار Capture في حال تمت العملية مسبقاً
+    if (payment.status === "CAPTURED") {
+      return res.status(409).json({ error: "Payment already captured previously." });
     }
 
-    // ✅ 6. حفظ التغييرات
+    if (payment.status !== "AUTHORIZED") {
+      return res.status(402).json({ error: "Payment must be AUTHORIZED before acceptance." });
+    }
+
+    // =================== 🔥 Stripe Capture ====================
+    const stripePayment = await stripe.paymentIntents.capture(payment.txnId);
+
+    payment.status = "CAPTURED";
+    payment.capturedAt = new Date();
+    payment.timeline.push({
+      action: "CAPTURED",
+      by: "EXPERT_ACCEPT",
+      at: new Date(),
+      meta: { stripe: stripePayment.id }
+    });
+    await payment.save();
+
+    booking.status = "CONFIRMED";
+    booking.payment.status = "CAPTURED";
+    booking.payment.netToExpert = booking.payment.amount * 0.9;  // (10% platform cut)
+    booking.timeline.push({ by: "EXPERT", action: "CONFIRMED", at: new Date() });
     await booking.save();
 
-    // ✅ 7. استجابة للعميل
-    res.json({
+     await sendNotificationToUser(
+  booking.customer,
+  "✔ Booking Accepted",
+  `Your booking (${booking.code}) has been accepted successfully.`
+);
+
+
+    return res.json({
       success: true,
-      message: payment
-        ? "Booking confirmed and payment captured successfully."
-        : "Booking confirmed (no payment found).",
-      booking,
+      message: "✔ Booking confirmed & payment captured successfully",
+      booking
     });
+
   } catch (err) {
-    console.error("❌ acceptBooking error:", err);
-    res.status(500).json({
-      error: "Something went wrong while accepting the booking.",
-      details: err.message,
-    });
+    console.error("❌ acceptBooking error", err);
+    res.status(500).json({ error: err.message });
   }
 };
 
 
+
+
 export const declineBooking = async (req, res) => {
-  const userId = req.user.id;
-  const booking = await Booking.findById(req.params.id);
-  ensureOwnership(booking, userId);
+  try {
+    const userId = req.user.id;
+    const booking = await Booking.findById(req.params.id);
+    ensureOwnership(booking, userId);
 
-  if (booking.status !== "PENDING")
-    return res
-      .status(400)
-      .json({ error: "Only PENDING can be declined" });
+    if (booking.status !== "PENDING")
+      return res.status(400).json({ error: "Only PENDING bookings can be declined." });
 
-  booking.status = "CANCELED";
-  booking.timeline.push({ by: "EXPERT", action: "DECLINED" });
-  await booking.save();
+    const payment = await Payment.findOne({ booking: booking._id });
 
-  res.json({ booking });
+    // 🔥 لو يوجد دفع AUTHORIZED → Cancel via Stripe
+    if (payment && payment.status === "AUTHORIZED") {
+      await stripe.paymentIntents.cancel(payment.txnId);
+      payment.status = "CANCELED";
+      payment.timeline.push({ action: "CANCELED_BEFORE_CONFIRM", at: new Date() });
+      await payment.save();
+    }
+
+    booking.status = "CANCELED";
+    booking.timeline.push({ by: "EXPERT", action: "DECLINED" });
+    await booking.save();
+
+      await sendNotificationToUser(
+      booking.customer,
+      "❌ Booking Declined",
+      `Your booking (${booking.code}) has been declined by the expert.`
+    );
+
+    res.json({ success: true, message: "❌ Booking declined & payment reversed if present", booking });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
+
 
 export const rescheduleBooking = async (req, res) => {
   const userId = req.user.id;

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'pages/admin_dashboard_page.dart';
 import 'pages/admin_experts_page.dart';
+import 'pages/admin_payments_page.dart';
 import 'widgets/admin_sidebar.dart';
-
+import 'pages/admin_earnings_page.dart';
 class AdminHome extends StatefulWidget {
   const AdminHome({super.key});
 
@@ -16,9 +17,11 @@ class _AdminHomeState extends State<AdminHome> {
   final pages = const [
     AdminDashboardPage(),
     AdminExpertsPage(),
+    AdminPaymentsPage(),
+     AdminEarningsPage(),
   ];
 
-  @override
+ @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 1100;
 

@@ -1,3 +1,4 @@
+//chart card 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -24,6 +25,26 @@ class ChartCard extends StatelessWidget {
         ],
       ),
       height: 300,
+     child: Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    const Text(
+      "Bookings Analytics",
+      style: TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 15,
+        color: Color(0xFF1F2933),
+      ),
+    ),
+    SizedBox(height: 4),
+    const Text(
+      "Monthly booking activity across the platform",
+      style: TextStyle(fontSize: 11, color: Colors.grey),
+    ),
+    SizedBox(height: 12),
+
+    // الرسم البياني
+    Expanded(
       child: LineChart(
         LineChartData(
           titlesData: FlTitlesData(show: true),
@@ -43,6 +64,10 @@ class ChartCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
+  ],
+),
+
     );
   }
 }

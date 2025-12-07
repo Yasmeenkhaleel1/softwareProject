@@ -9,6 +9,8 @@ const userSchema = new mongoose.Schema(
     name: { type: String, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
+    
+    fcmToken: { type: String, default: null },
 
     // ✅ بيانات إضافية
     age: { type: Number, min: 1, max: 120 },
