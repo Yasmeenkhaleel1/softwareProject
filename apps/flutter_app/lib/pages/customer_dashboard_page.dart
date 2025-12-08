@@ -9,6 +9,7 @@ import 'ExpertDetailPage.dart';
 import 'customer_notifications_page.dart';
 import 'customer_messages_page.dart';
 import 'customer_help_page.dart';
+import 'customer_calendar_page.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -412,7 +413,7 @@ Widget build(BuildContext context) {
                 );
               },
             ),
-            IconButton(
+                        IconButton(
               tooltip: "Help & Support",
               icon: const Icon(Icons.help_outline, color: accentColor),
               onPressed: () {
@@ -424,7 +425,37 @@ Widget build(BuildContext context) {
                 );
               },
             ),
+
             const SizedBox(width: 4),
+
+            // 🔹 My Calendar tab (يفتح صفحة التقويم)
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: accentColor,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerCalendarPage()),
+                );
+              },
+              child: const Text(
+                "My Calendar",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // 🔹 My Profile (زي ما هو لكن بعد الكالندر)
             TextButton(
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
@@ -449,6 +480,7 @@ Widget build(BuildContext context) {
               ),
             ),
             const SizedBox(width: 18),
+
           ],
         ),
       ],
@@ -716,21 +748,21 @@ Widget build(BuildContext context) {
           ),
         ),
         const SizedBox(height: 10),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 3.0,
-          ),
-          itemCount: _searchResults.length,
-          itemBuilder: (context, index) {
-            final item = _searchResults[index];
-            return _buildServiceSearchCard(item);
-          },
-        ),
+       SizedBox(
+  height: 170,
+  child: ListView.separated(
+    scrollDirection: Axis.horizontal,
+    itemCount: _searchResults.length,
+    separatorBuilder: (_, __) => SizedBox(width: 16),
+    itemBuilder: (context, index) {
+      return SizedBox(
+        width: 320,
+        child: _buildServiceSearchCard(_searchResults[index]),
+      );
+    },
+  ),
+)
+
       ],
     );
   }
@@ -966,26 +998,19 @@ Widget _buildShowExpertsSection() {
       const SizedBox(height: 14),
 
       SizedBox(
-        height: 220,
-        child: PageView.builder(
-          controller: _expertsPageController,
-          itemCount: experts.length,
-          padEnds: false,
-          itemBuilder: (context, index) {
-            final expert = experts[index] as Map<String, dynamic>;
-            final distance = (index - _expertsPage).abs();
-            final scale = (1 - distance * 0.12).clamp(0.86, 1.0);
+  height: 190,
+  child: ListView.separated(
+    scrollDirection: Axis.horizontal,
+    itemBuilder: (context, index) {
+      final expert = experts[index] as Map<String, dynamic>;
+      return _buildExpertCard(expert);
+    },
+    separatorBuilder: (_, __) => SizedBox(width: 16),
+    itemCount: experts.length,
+  ),
+)
 
-            return Transform.scale(
-              scale: scale,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: _buildExpertCard(expert),
-              ),
-            );
-          },
-        ),
-      ),
+
     ],
   );
 }
@@ -1004,7 +1029,7 @@ Widget _buildExpertCard(Map<String, dynamic> expert) {
     child: AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.only(right: 16),
-      width: 155,
+      width: 130,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -1031,8 +1056,8 @@ Widget _buildExpertCard(Map<String, dynamic> expert) {
           children: [
             // ===== صورة الخبير =====
             Container(
-              height: 52,
-              width: 52,
+              height: 44,
+              width: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(
@@ -1065,7 +1090,7 @@ Widget _buildExpertCard(Map<String, dynamic> expert) {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 14,
+                fontSize: 12,
                 color: Color(0xFF285E6E),
               ),
             ),
@@ -1156,9 +1181,9 @@ Widget _buildExpertCard(Map<String, dynamic> expert) {
 
 Widget _buildCategorySection() {
   final categories = [
-    {"title": "Technology", "icon": Icons.code},
+    //{"title": "Technology", "icon": Icons.code},
     {"title": "Design", "icon": Icons.palette},
-    {"title": "Business", "icon": Icons.business_center},
+   // {"title": "Business", "icon": Icons.business_center},
     {"title": "Education", "icon": Icons.school},
     {"title": "Marketing", "icon": Icons.campaign},
     {"title": "Consulting", "icon": Icons.support_agent},

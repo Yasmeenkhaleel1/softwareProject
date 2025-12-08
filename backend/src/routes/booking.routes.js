@@ -3,7 +3,9 @@ import express from "express";
 import {
   createBookingPublic,
   getCustomerBookings,
+  addCustomerReview,
 } from "../controllers/booking.controller.js";
+import { auth } from "../middleware/auth.js";
 
 const bookingRouter = express.Router();
 
@@ -17,5 +19,12 @@ bookingRouter.post("/public/bookings", createBookingPublic);
 
 // ✅ جلب كل حجوزات العميل (للواجهة MyBookings)
 bookingRouter.get("/public/bookings", getCustomerBookings);
+
+// ✅ تقييم حجز من قبل العميل (يتطلب تسجيل الدخول)
+bookingRouter.post(
+  "/customer/bookings/:id/review",
+  auth(),
+  addCustomerReview
+);
 
 export default bookingRouter;

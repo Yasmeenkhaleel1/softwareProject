@@ -247,4 +247,134 @@ class ApiService {
     return body['items'] as List<dynamic>;
   }
 
+  // ---------- DISPUTES ----------
+
+
+  static Future<List<dynamic>> getDisputableBookings() async {
+    final token = await getToken();
+    // ✅ هذا الـ endpoint اللي اتفقنا عليه في الباك إند
+    final url = "$baseUrl/public/disputes/bookings";
+
+    final res = await http.get(
+      Uri.parse(url),
+      headers: {
+        "Content-Type": "application/json",
+        if (token != null) "Authorization": "Bearer $token",
+      },
+    );
+
+    final body = jsonDecode(res.body);
+    if (res.statusCode >= 400) {
+      throw Exception(body["message"] ?? "Failed to load disputable bookings");
+    }
+    return body["bookings"] as List<dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> createDispute({
+    required String bookingId,
+    required String message,
+    String type = "OTHER",
+    List<String> attachments = const [], // 🟣 جديد: قائمة الروابط
+  }) async {
+    final token = await getToken();
+    final url = "$baseUrl/public/disputes";
+
+    final res = await http.post(
+      Uri.parse(url),
+      headers: {
+        "Content-Type": "application/json",
+        if (token != null) "Authorization": "Bearer $token",
+      },
+      body: jsonEncode({
+        "bookingId": bookingId,
+        "message": message,
+        "type": type,
+        "attachments": attachments, // 🟣 نرسلها للباك إند
+      }),
+    );
+
+    final body = jsonDecode(res.body);
+    if (res.statusCode >= 400) {
+      throw Exception(
+        body["message"] ?? body["error"] ?? "Failed to open dispute",
+      );
+    }
+    return body;
+  }
+
+ // 🔹 جلب حجوزات الكستمر للتقويم
+ static Future<List<dynamic>> fetchCustomerBookings({
+    required String customerId,
+    DateTime? from,
+    DateTime? to,
+    String? status,
+  }) async {
+    final token = await getToken();
+
+    String? fromStr;
+    String? toStr;
+    if (from != null) {
+      fromStr = from.toUtc().toIso8601String();
+    }
+    if (to != null) {
+      toStr = to.toUtc().toIso8601String();
+    }
+
+    final params = <String, String>{
+      'customerId': customerId,
+      'page': '1',
+      'limit': '200',
+      if (status != null) 'status': status,
+      if (fromStr != null) 'from': fromStr,
+      if (toStr != null) 'to': toStr,
+    };
+
+    final uri = Uri.parse('$baseUrl/public/bookings')
+        .replace(queryParameters: params);
+
+    final res = await http.get(uri, headers: {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    });
+
+    if (res.statusCode >= 400) {
+      throw Exception('Failed to load bookings: ${res.body}');
+    }
+
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return (body['bookings'] as List?) ?? [];
+  }
+
+  // 🔹 إرسال تقييم للحجز (ويحدّث تقييم الخدمة)
+  static Future<void> submitBookingReview({
+    required String bookingId,
+    required int rating,
+    String? comment,
+  }) async {
+    final token = await getToken();
+    if (token == null) {
+      throw Exception("Not authenticated");
+    }
+
+    final uri =
+        Uri.parse('$baseUrl/customer/bookings/$bookingId/review');
+
+    final res = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'rating': rating,
+        'comment': comment ?? '',
+      }),
+    );
+
+    if (res.statusCode >= 400) {
+      throw Exception('Failed to submit review: ${res.body}');
+    }
+  }
+
+
 }

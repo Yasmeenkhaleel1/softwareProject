@@ -103,12 +103,33 @@ const BookingSchema = new mongoose.Schema(
 
     notes: String,
     customerNote: String,
+    
+         meeting: {
+      provider: {
+        type: String,
+        enum: ["ZOOM", "GOOGLE_MEET", "OTHER"],
+        default: "ZOOM",
+      },
+      joinUrl: String,   // يستخدمه العميل + ممكن الخبير
+      startUrl: String,  // لينك المضيف (الخبير) من Zoom
+      meetingId: String, // رقم الميتنج (اختياري للعرض أو الدعم)
+    },
+
+
+    // 🔹 Review من العميل بعد الجلسة
+    review: {
+      rating: { type: Number, min: 1, max: 5 },
+      comment: String,
+      createdAt: Date,
+      updatedAt: Date,
+    },
 
     timeline: { type: [BookingTimelineSchema], default: [] },
   },
   { timestamps: true }
 );
 
+  
 // فهارس
 BookingSchema.index({ expert: 1, startAt: 1, endAt: 1, status: 1 });
 BookingSchema.index({
