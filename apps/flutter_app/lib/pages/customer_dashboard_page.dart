@@ -431,7 +431,8 @@ Widget build(BuildContext context) {
             // 🔹 My Calendar tab (يفتح صفحة التقويم)
             TextButton(
               style: TextButton.styleFrom(
-                foregroundColor: accentColor,
+                foregroundColor: Colors.white,
+                backgroundColor: accentColor,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999),
