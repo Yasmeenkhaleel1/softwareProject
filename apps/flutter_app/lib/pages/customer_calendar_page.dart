@@ -63,9 +63,12 @@ class _CustomerCalendarPageState extends State<CustomerCalendarPage> {
         to: lastDay,
       );
 
-      _allBookings = data.map<Map<String, dynamic>>((e) {
-        return (e as Map).map((k, v) => MapEntry(k.toString(), v));
-      }).toList();
+      _allBookings = data
+    .map<Map<String, dynamic>>(
+      (e) => Map<String, dynamic>.from(e as Map),
+    )
+    .toList();
+
 
       _events.clear();
       for (final b in _allBookings) {
@@ -110,44 +113,49 @@ class _CustomerCalendarPageState extends State<CustomerCalendarPage> {
     }
   }
 
-  Future<void> _joinSession(Map<String, dynamic> booking) async {
-    final meeting = (booking['meeting'] ?? {}) as Map<String, dynamic>;
-    final urlStr =
-        (meeting['joinUrl'] ?? meeting['meetingUrl'] ?? '').toString().trim();
+ Future<void> _joinSession(Map<String, dynamic> booking) async {
+  // 🔹 تحويل آمن من LinkedMap لـ Map<String, dynamic>
+  final meeting =
+      (booking['meeting'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
 
-    if (urlStr.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("No meeting link available for this booking."),
-        ),
-      );
-      return;
-    }
+  final urlStr =
+      (meeting['joinUrl'] ?? meeting['meetingUrl'] ?? '').toString().trim();
 
-    final uri = Uri.tryParse(urlStr);
-    if (uri == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Invalid meeting URL."),
-        ),
-      );
-      return;
-    }
-
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Could not open meeting link."),
-        ),
-      );
-    }
+  if (urlStr.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("No meeting link available for this booking."),
+      ),
+    );
+    return;
   }
 
+  final uri = Uri.tryParse(urlStr);
+  if (uri == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Invalid meeting URL."),
+      ),
+    );
+    return;
+  }
+
+  if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Could not open meeting link."),
+      ),
+    );
+  }
+}
+
+
   Future<void> _openRatingDialog(Map<String, dynamic> booking) async {
-    final service = (booking['service'] ?? {}) as Map<String, dynamic>;
+    final service = (booking['service'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
     final serviceTitle = (service['title'] ?? 'Service').toString();
     final currentReview =
-        (booking['review'] ?? {}) as Map<String, dynamic>? ?? {};
+    (booking['review'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
 
     int rating = (currentReview['rating'] ?? 5) as int;
     final TextEditingController commentCtrl = TextEditingController(
@@ -354,9 +362,10 @@ class _CustomerCalendarPageState extends State<CustomerCalendarPage> {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final b = bookings[index];
-        final service = (b['service'] ?? {}) as Map<String, dynamic>;
-        final expert = (b['expert'] ?? {}) as Map<String, dynamic>;
-        final review = (b['review'] ?? {}) as Map<String, dynamic>;
+        final service = (b['service'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+        final expert  = (b['expert']  as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+        final review  = (b['review']  as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+
         final status = b['status']?.toString() ?? '';
 
         final title = (service['title'] ?? 'Service').toString();
@@ -373,8 +382,19 @@ class _CustomerCalendarPageState extends State<CustomerCalendarPage> {
               "${e.hour.toString().padLeft(2, '0')}:${e.minute.toString().padLeft(2, '0')}"
             : "";
 
-        final canJoin = ["CONFIRMED", "IN_PROGRESS"]
-            .contains(status.toUpperCase());
+     final meeting =
+    (b['meeting'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+
+     final joinUrl = (meeting['joinUrl'] ?? meeting['meetingUrl'] ?? '')
+          .toString()
+          .trim();
+
+          final canJoin = ["CONFIRMED", "IN_PROGRESS"]
+            .contains(status.toUpperCase()) &&
+            joinUrl.isNotEmpty;
+
+
         final canRate = status == "COMPLETED";
 
         final ratingValue = (review['rating'] ?? 0) as int;

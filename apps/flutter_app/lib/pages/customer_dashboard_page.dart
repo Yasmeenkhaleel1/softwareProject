@@ -9,6 +9,7 @@ import 'ExpertDetailPage.dart';
 import 'customer_notifications_page.dart';
 import 'customer_messages_page.dart';
 import 'customer_help_page.dart';
+import 'customer_calendar_page.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -412,7 +413,7 @@ Widget build(BuildContext context) {
                 );
               },
             ),
-            IconButton(
+                        IconButton(
               tooltip: "Help & Support",
               icon: const Icon(Icons.help_outline, color: accentColor),
               onPressed: () {
@@ -424,7 +425,37 @@ Widget build(BuildContext context) {
                 );
               },
             ),
+
             const SizedBox(width: 4),
+
+            // 🔹 My Calendar tab (يفتح صفحة التقويم)
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: accentColor,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerCalendarPage()),
+                );
+              },
+              child: const Text(
+                "My Calendar",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // 🔹 My Profile (زي ما هو لكن بعد الكالندر)
             TextButton(
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
@@ -449,6 +480,7 @@ Widget build(BuildContext context) {
               ),
             ),
             const SizedBox(width: 18),
+
           ],
         ),
       ],

@@ -5,6 +5,8 @@ import { nextBookingCode } from "../utils/codes.js";
 import Payment from "../models/payment.model.js";
 import { ensureOwnership } from "../utils/ownership.js"
 
+import { createZoomMeeting } from "../services/zoom.service.js";
+
 import { sendNotificationToUser } from "../services/notificationSender.js";
 
 import mongoose from "mongoose";
@@ -166,22 +168,31 @@ export const acceptBooking = async (req, res) => {
     ensureOwnership(booking, userId);
 
     if (booking.status !== "PENDING") {
-      return res.status(400).json({ error: "Only PENDING bookings can be accepted." });
+      return res
+        .status(400)
+        .json({ error: "Only PENDING bookings can be accepted." });
     }
 
     const payment = await Payment.findOne({ booking: booking._id });
-    if (!payment) return res.status(402).json({ error: "No payment found for this booking." });
+    if (!payment)
+      return res
+        .status(402)
+        .json({ error: "No payment found for this booking." });
 
     // 🔥 منع تكرار Capture في حال تمت العملية مسبقاً
     if (payment.status === "CAPTURED") {
-      return res.status(409).json({ error: "Payment already captured previously." });
+      return res
+        .status(409)
+        .json({ error: "Payment already captured previously." });
     }
 
     if (payment.status !== "AUTHORIZED") {
-      return res.status(402).json({ error: "Payment must be AUTHORIZED before acceptance." });
+      return res.status(402).json({
+        error: "Payment must be AUTHORIZED before acceptance.",
+      });
     }
 
-    // =================== 🔥 Stripe Capture ====================
+    // =================== 💳 Stripe Capture ====================
     const stripePayment = await stripe.paymentIntents.capture(payment.txnId);
 
     payment.status = "CAPTURED";
@@ -190,34 +201,86 @@ export const acceptBooking = async (req, res) => {
       action: "CAPTURED",
       by: "EXPERT_ACCEPT",
       at: new Date(),
-      meta: { stripe: stripePayment.id }
+      meta: { stripe: stripePayment.id },
     });
     await payment.save();
 
     booking.status = "CONFIRMED";
     booking.payment.status = "CAPTURED";
-    booking.payment.netToExpert = booking.payment.amount * 0.9;  // (10% platform cut)
-    booking.timeline.push({ by: "EXPERT", action: "CONFIRMED", at: new Date() });
+    booking.payment.netToExpert = booking.payment.amount * 0.9; // (10% platform cut)
+    booking.timeline.push({
+      by: "EXPERT",
+      action: "CONFIRMED",
+      at: new Date(),
+    });
+
+    // =================== 🎥 Zoom Meeting (لا نكسر الحجز لو فشل) ====================
+    try {
+      const topic =
+        booking.serviceSnapshot?.title
+          ? `Session: ${booking.serviceSnapshot.title} (${booking.code})`
+          : `Booking ${booking.code}`;
+
+      const zoomMeeting = await createZoomMeeting({
+        topic,
+        startTime: booking.startAt,
+        durationMinutes: booking.serviceSnapshot?.durationMinutes || 60,
+        timezone: booking.timezone || process.env.ZOOM_DEFAULT_TIMEZONE || "Asia/Hebron",
+      });
+
+      booking.meeting = {
+        provider: "ZOOM",
+        joinUrl: zoomMeeting.joinUrl,
+        startUrl: zoomMeeting.startUrl,
+        meetingId: zoomMeeting.meetingId,
+      };
+
+      booking.timeline.push({
+        by: "SYSTEM",
+        action: "MEETING_CREATED",
+        at: new Date(),
+        meta: {
+          provider: "ZOOM",
+          meetingId: zoomMeeting.meetingId,
+        },
+      });
+    } catch (zoomErr) {
+      console.error("⚠ Zoom meeting creation failed", zoomErr);
+      booking.timeline.push({
+        by: "SYSTEM",
+        action: "MEETING_CREATE_FAILED",
+        at: new Date(),
+        meta: {
+          provider: "ZOOM",
+          message: zoomErr.message,
+        },
+      });
+      // ❗ المهم: ما نرمي error هنا عشان ما نخرب قبول الحجز
+    }
+
     await booking.save();
 
-     /*await sendNotificationToUser(
-  booking.customer,
-  "✔ Booking Accepted",
-  `Your booking (${booking.code}) has been accepted successfully.`
-);*/
-
+    // 🔔 إشعار (لو حابة ترجعي تشغليه لاحقاً)
+    /*
+    await sendNotificationToUser(
+      booking.customer,
+      "✔ Booking Accepted",
+      `Your booking (${booking.code}) has been accepted successfully.`
+    );
+    */
 
     return res.json({
       success: true,
-      message: "✔ Booking confirmed & payment captured successfully",
-      booking
+      message:
+        "✔ Booking confirmed, payment captured, and Zoom meeting created (if possible)",
+      booking,
     });
-
   } catch (err) {
     console.error("❌ acceptBooking error", err);
     res.status(500).json({ error: err.message });
   }
 };
+
 
 
 

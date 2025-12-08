@@ -103,14 +103,18 @@ const BookingSchema = new mongoose.Schema(
 
     notes: String,
     customerNote: String,
-     meeting: {
+    
+         meeting: {
       provider: {
         type: String,
         enum: ["ZOOM", "GOOGLE_MEET", "OTHER"],
         default: "ZOOM",
       },
-      joinUrl: String, // نفس اللينك للخبير والعميل
+      joinUrl: String,   // يستخدمه العميل + ممكن الخبير
+      startUrl: String,  // لينك المضيف (الخبير) من Zoom
+      meetingId: String, // رقم الميتنج (اختياري للعرض أو الدعم)
     },
+
 
     // 🔹 Review من العميل بعد الجلسة
     review: {

@@ -301,7 +301,7 @@ class ApiService {
     }
     return body;
   }
-  
+
  // 🔹 جلب حجوزات الكستمر للتقويم
  static Future<List<dynamic>> fetchCustomerBookings({
     required String customerId,
@@ -329,7 +329,7 @@ class ApiService {
       if (toStr != null) 'to': toStr,
     };
 
-    final uri = Uri.parse('$baseUrl/api/public/bookings')
+    final uri = Uri.parse('$baseUrl/public/bookings')
         .replace(queryParameters: params);
 
     final res = await http.get(uri, headers: {
@@ -357,7 +357,7 @@ class ApiService {
     }
 
     final uri =
-        Uri.parse('$baseUrl/api/customer/bookings/$bookingId/review');
+        Uri.parse('$baseUrl/customer/bookings/$bookingId/review');
 
     final res = await http.post(
       uri,
