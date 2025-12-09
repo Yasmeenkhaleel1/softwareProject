@@ -354,6 +354,7 @@ export async function getCustomerBookings(req, res) {
         timezone: b.timezone,
         service: b.service,
         expert: b.expert,
+        expertUserId: b.expertUserId, ///for messaging
         payment: b.payment,
         customerNote: b.customerNote,
         createdAt: b.createdAt,

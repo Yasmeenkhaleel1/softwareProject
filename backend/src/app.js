@@ -33,6 +33,7 @@ import fcmRoutes from "./routes/fcm.route.js";
 
 import publicServicesRoutes from "./routes/public.services.routes.js";
 
+import messageRoutes from "./routes/message.route.js";
 
 // إعدادات المسار العام
 const __filename = fileURLToPath(import.meta.url);
@@ -114,6 +115,8 @@ app.use("/api/fcm", fcmRoutes);
 app.use("/api/notifications", notificationRoutes);
 
 app.use("/api/notify", notifyRoutes);
+
+app.use("/api/messages", messageRoutes);
 
 // 🔹 الإدارة (Admin)
 app.use("/api/admin", adminRoutes);

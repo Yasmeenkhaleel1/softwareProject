@@ -11,6 +11,7 @@ import 'my_services_page.dart';
 import 'my_booking_tab.dart';
 import 'notifications_page.dart';
 import '../services/notifications_api.dart';
+import 'chat/conversations_page.dart'; // ✅ صفحة المسجات الجديدة
 
 
 class ExpertDashboardPage extends StatefulWidget {
@@ -281,41 +282,49 @@ Future<void> _loadDashboardStats() async {
     );
 
     final sidebar = ExpertSidebar(
-      selectedIndex: _selected,
-    onSelected: (i) {
-  Navigator.pop(context); // إغلاق drawer إن وجد
+  selectedIndex: _selected,
+  onSelected: (i) {
+    Navigator.pop(context); // إغلاق drawer إن وجد
 
-  if (i == 0) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ViewExpertProfilePage()),
-    ).then((_) {
-      setState(() => _selected = -1); // ✅ عند الرجوع
-    });
-  } else if (i == 1) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MyServicesPage()),
-    ).then((_) {
-      setState(() => _selected = -1); // ✅ عند الرجوع
-    });
-  } else if (i == 2) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MyBookingTab()),
-    ).then((_) {
-      setState(() => _selected = -1); // ✅ عند الرجوع
-    });
-  } else if (i == 5) {
-    Navigator.popUntil(context, ModalRoute.withName('/'));
-  }
+    if (i == 0) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ViewExpertProfilePage()),
+      ).then((_) {
+        setState(() => _selected = -1);
+      });
+    } else if (i == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MyServicesPage()),
+      ).then((_) {
+        setState(() => _selected = -1);
+      });
+    } else if (i == 2) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MyBookingTab()),
+      ).then((_) {
+        setState(() => _selected = -1);
+      });
+    } else if (i == 4) {
+      // 📨 My Messaging → افتح صفحة المحادثات
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const ConversationsPage(),
+        ),
+      ).then((_) {
+        setState(() => _selected = -1);
+      });
+    } else if (i == 5) {
+      Navigator.popUntil(context, ModalRoute.withName('/'));
+    }
 
-  setState(() => _selected = i);
-},
+    setState(() => _selected = i);
+  },
+);
 
-
-
-    );
 
     // ====== اختيارات العرض ======
     String displayName = "Unknown Expert";

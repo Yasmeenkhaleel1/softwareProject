@@ -10,6 +10,8 @@ import 'customer_notifications_page.dart';
 import 'customer_messages_page.dart';
 import 'customer_help_page.dart';
 import 'customer_calendar_page.dart';
+import 'chat/conversations_page.dart'; // ✅ صفحة المسجات الجديدة
+import 'customer_experts_page.dart'; // 👈 صفحة My Experts اللي عملناها
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -358,133 +360,175 @@ Widget build(BuildContext context) {
           ),
         ],
       ),
-      actions: [
-        Row(
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Text(
-                  "Welcome back,",
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey,
-                  ),
-                ),
-                Text(
-                  userName,
-                  style: const TextStyle(
-                    color: accentColor,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+     actions: [
+  Row(
+    children: [
+      Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          const Text(
+            "Welcome back,",
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey,
             ),
-            const SizedBox(width: 10),
-            const CircleAvatar(
-              radius: 18,
-              backgroundColor: Color(0xFFE3F6FA),
-              child: Icon(Icons.person, color: accentColor, size: 20),
+          ),
+          Text(
+            userName,
+            style: const TextStyle(
+              color: accentColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: "Notifications",
-              icon: const Icon(Icons.notifications_none, color: accentColor),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CustomerNotificationsPage(),
-                  ),
-                );
-              },
-            ),
-            IconButton(
-              tooltip: "Messages",
-              icon: const Icon(Icons.mail_outline, color: accentColor),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CustomerMessagesPage(),
-                  ),
-                );
-              },
-            ),
-                        IconButton(
-              tooltip: "Help & Support",
-              icon: const Icon(Icons.help_outline, color: accentColor),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CustomerHelpPage(),
-                  ),
-                );
-              },
-            ),
+          ),
+        ],
+      ),
+      const SizedBox(width: 10),
+      const CircleAvatar(
+        radius: 18,
+        backgroundColor: Color(0xFFE3F6FA),
+        child: Icon(Icons.person, color: accentColor, size: 20),
+      ),
+      const SizedBox(width: 8),
 
-            const SizedBox(width: 4),
-
-            // 🔹 My Calendar tab (يفتح صفحة التقويم)
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
-                backgroundColor: accentColor,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CustomerCalendarPage()),
-                );
-              },
-              child: const Text(
-                "My Calendar",
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+      // 🔔 Notifications
+      IconButton(
+        tooltip: "Notifications",
+        icon: const Icon(Icons.notifications_none, color: accentColor),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CustomerNotificationsPage(),
             ),
+          );
+        },
+      ),
 
-            const SizedBox(width: 8),
-
-            // 🔹 My Profile (زي ما هو لكن بعد الكالندر)
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
-                backgroundColor: accentColor,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CustomerProfilePage(),
-                  ),
-                );
-              },
-              child: const Text(
-                "My Profile",
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
+      // 💬 Messages (قائمة المحادثات)
+      IconButton(
+        tooltip: "Messages",
+        icon: const Icon(Icons.message_outlined, color: accentColor),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ConversationsPage(),
             ),
-            const SizedBox(width: 18),
+          );
+        },
+      ),
 
-          ],
+      // ❓ Help & Support
+      IconButton(
+        tooltip: "Help & Support",
+        icon: const Icon(Icons.help_outline, color: accentColor),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CustomerHelpPage(),
+            ),
+          );
+        },
+      ),
+
+      const SizedBox(width: 4),
+
+      // 👥 My Experts
+      TextButton.icon(
+        style: TextButton.styleFrom(
+          foregroundColor: accentColor,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
         ),
-      ],
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CustomerExpertsPage(),
+            ),
+          );
+        },
+        icon: const Icon(
+          Icons.people_alt_outlined,
+          size: 18,
+        ),
+        label: const Text(
+          "My Experts",
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      const SizedBox(width: 4),
+
+      // 📅 My Calendar
+      TextButton(
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: accentColor,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CustomerCalendarPage(),
+            ),
+          );
+        },
+        child: const Text(
+          "My Calendar",
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      const SizedBox(width: 8),
+
+      // 👤 My Profile
+      TextButton(
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: accentColor,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CustomerProfilePage(),
+            ),
+          );
+        },
+        child: const Text(
+          "My Profile",
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      const SizedBox(width: 18),
+    ],
+  ),
+],
+       
     );
   }
 
