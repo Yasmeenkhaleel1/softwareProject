@@ -2,7 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:file_picker/file_picker.dart'; 
 class ApiService {
   // 🔥 لأن المشروع يعمل فقط على الويب → نستخدم localhost دائماً
   static const String baseUrl = "http://localhost:5000/api";
@@ -345,6 +345,47 @@ class ApiService {
     return (body['bookings'] as List?) ?? [];
   }
 
+  /// 🔹 جلب حجوزات الخبير (تُستخدم في صفحة My Customers)
+  static Future<List<dynamic>> fetchExpertBookings({
+    DateTime? from,
+    DateTime? to,
+    String? status,
+    int page = 1,
+    int limit = 200,
+  }) async {
+    final token = await getToken();
+    if (token == null) {
+      throw Exception('Not logged in');
+    }
+
+    final params = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+      if (status != null) 'status': status,
+      if (from != null) 'from': from.toUtc().toIso8601String(),
+      if (to != null) 'to': to.toUtc().toIso8601String(),
+    };
+
+    final uri = Uri.parse('$baseUrl/expert/bookings')
+        .replace(queryParameters: params);
+
+    final res = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (res.statusCode >= 400) {
+      throw Exception('Failed to load expert bookings: ${res.body}');
+    }
+
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    // listBookings بيرجع { data, total, page, pages }
+    return (body['data'] as List?) ?? [];
+  }
+
   // 🔹 إرسال تقييم للحجز (ويحدّث تقييم الخدمة)
   static Future<void> submitBookingReview({
     required String bookingId,
@@ -374,6 +415,195 @@ class ApiService {
     if (res.statusCode >= 400) {
       throw Exception('Failed to submit review: ${res.body}');
     }
+  }
+
+    // =======================
+  //  MESSAGING / CHAT API
+  // =======================
+
+  /// جلب كل المحادثات الخاصة باليوزر الحالي (Customer أو Expert)
+  static Future<List<Map<String, dynamic>>> fetchMyConversations() async {
+    final token = await getToken();
+    if (token == null) throw Exception('Not logged in');
+
+    final res = await http.get(
+      Uri.parse('$baseUrl/messages/conversations'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to load conversations (${res.statusCode})');
+    }
+
+    final decoded = jsonDecode(res.body) as Map;
+    final list = (decoded['conversations'] as List? ?? []);
+
+    return list
+        .map<Map<String, dynamic>>(
+          (e) => Map<String, dynamic>.from(e as Map),
+        )
+        .toList();
+  }
+
+  /// CUSTOMER يبدأ محادثة مع خبير
+  static Future<Map<String, dynamic>> getOrCreateConversationAsCustomer({
+    required String expertId,
+  }) async {
+    final token = await getToken();
+    if (token == null) throw Exception('Not logged in');
+
+    final res = await http.post(
+      Uri.parse('$baseUrl/messages/conversations'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'expertId': expertId,
+      }),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to create/get conversation (${res.statusCode})');
+    }
+
+    final decoded = jsonDecode(res.body) as Map;
+    return Map<String, dynamic>.from(decoded['conversation'] as Map);
+  }
+
+  /// EXPERT يبدأ محادثة مع كستمر
+  static Future<Map<String, dynamic>> getOrCreateConversationAsExpert({
+    required String customerId,
+  }) async {
+    final token = await getToken();
+    if (token == null) throw Exception('Not logged in');
+
+    final res = await http.post(
+      Uri.parse('$baseUrl/messages/conversations'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'customerId': customerId,
+      }),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to create/get conversation (${res.statusCode})');
+    }
+
+    final decoded = jsonDecode(res.body) as Map;
+    return Map<String, dynamic>.from(decoded['conversation'] as Map);
+  }
+
+  /// جلب رسائل محادثة معيّنة
+  static Future<List<Map<String, dynamic>>> fetchConversationMessages(
+    String conversationId, {
+    int limit = 50,
+  }) async {
+    final token = await getToken();
+    if (token == null) throw Exception('Not logged in');
+
+    final res = await http.get(
+      Uri.parse(
+        '$baseUrl/messages/conversations/$conversationId/messages?limit=$limit',
+      ),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to load messages (${res.statusCode})');
+    }
+
+    final decoded = jsonDecode(res.body) as Map;
+    final list = (decoded['messages'] as List? ?? []);
+
+    return list
+        .map<Map<String, dynamic>>(
+          (e) => Map<String, dynamic>.from(e as Map),
+        )
+        .toList();
+  }
+
+  /// إرسال رسالة (نص + مرفق اختياري)
+  static Future<Map<String, dynamic>> sendMessage({
+    required String conversationId,
+    String? text,
+    String? attachmentUrl,
+    String? attachmentName,
+    String? attachmentType,
+    String? bookingId,
+  }) async {
+    final token = await getToken();
+    if (token == null) throw Exception('Not logged in');
+
+    if ((text == null || text.trim().isEmpty) &&
+        (attachmentUrl == null || attachmentUrl.isEmpty)) {
+      throw Exception('Message must have text or attachment');
+    }
+
+    final body = <String, dynamic>{};
+    if (text != null) body['text'] = text.trim();
+    if (attachmentUrl != null) body['attachmentUrl'] = attachmentUrl;
+    if (attachmentName != null) body['attachmentName'] = attachmentName;
+    if (attachmentType != null) body['attachmentType'] = attachmentType;
+    if (bookingId != null) body['bookingId'] = bookingId;
+
+    final res = await http.post(
+      Uri.parse(
+          '$baseUrl/messages/conversations/$conversationId/messages'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (res.statusCode != 201) {
+      throw Exception('Failed to send message (${res.statusCode})');
+    }
+
+    final decoded = jsonDecode(res.body) as Map;
+    return Map<String, dynamic>.from(decoded['message'] as Map);
+  }
+
+  /// رفع مرفق شات (نعيد استخدام /upload/disputes)
+  static Future<Map<String, dynamic>> uploadChatAttachment(
+      PlatformFile file) async {
+    final token = await getToken();
+    if (token == null) throw Exception('Not logged in');
+
+    if (file.bytes == null) {
+      throw Exception('File bytes are null (web/file_picker issue)');
+    }
+
+    final uri = Uri.parse('$baseUrl/upload/disputes');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $token';
+
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'files',
+        file.bytes!,
+        filename: file.name,
+      ),
+    );
+
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('Failed to upload attachment (${res.statusCode})');
+    }
+
+    final decoded = jsonDecode(res.body) as Map;
+    final files = (decoded['files'] as List? ?? []);
+    if (files.isEmpty) throw Exception('No file returned from server');
+
+    final first = Map<String, dynamic>.from(files.first as Map);
+    // structure: {originalName, url, size, mimeType}
+    return first;
   }
 
 
