@@ -4,14 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../api/api_service.dart';
 import './chat/chat_page.dart';
 
-class CustomerExpertsPage extends StatefulWidget {
-  const CustomerExpertsPage({super.key});
+class ExpertCustomersPage extends StatefulWidget {
+  const ExpertCustomersPage({super.key});
 
   @override
-  State<CustomerExpertsPage> createState() => _CustomerExpertsPageState();
+  State<ExpertCustomersPage> createState() => _ExpertCustomersPageState();
 }
 
-class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
+class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
   static const Color _brand = Color(0xFF62C6D9);
   static const Color _brandDark = Color(0xFF285E6E);
   static const Color _bg = Color(0xFFF4F7FB);
@@ -19,8 +19,8 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
   bool _loading = true;
   String? _error;
 
-  // experts اللي حجز معهم هذا الكستمر
-  final List<_ExpertContact> _experts = [];
+  // العملاء الذين حجزوا عند هذا الخبير
+  final List<_CustomerContact> _customers = [];
 
   String? _myUserId;
 
@@ -32,11 +32,11 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
 
   Future<void> _initAndLoad() async {
     final prefs = await SharedPreferences.getInstance();
-    _myUserId = prefs.getString('userId');
-    await _loadExpertsFromBookings();
+    _myUserId = prefs.getString('userId'); // ID تبع الخبير (User)
+    await _loadCustomersFromBookings();
   }
 
-  Future<void> _loadExpertsFromBookings() async {
+  Future<void> _loadCustomersFromBookings() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -45,68 +45,63 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
     try {
       if (_myUserId == null) {
         setState(() {
-          _error = "Please login to see your experts.";
+          _error = "Please login to see your customers.";
           _loading = false;
         });
         return;
       }
 
-      // نجيب كل الحجوزات لهذا الكستمر
-      final bookings = await ApiService.fetchCustomerBookings(
-        customerId: _myUserId!,
-        // بدون من/إلى → يجيب كل الحجوزات (الباك إند هو اللي يحدد)
-      );
+      // نجيب كل الحجوزات لهذا الخبير (من الـ API الخاص بالخبير)
+      final bookings = await ApiService.fetchExpertBookings();
 
-      // نكوّن خريطة: expertUserId -> _ExpertContact
-      final Map<String, _ExpertContact> map = {};
+      // نكوّن خريطة: customerId -> _CustomerContact
+      final Map<String, _CustomerContact> map = {};
 
       for (final raw in bookings) {
-  if (raw is! Map) continue;
-  final b = Map<String, dynamic>.from(raw);
+        if (raw is! Map) continue;
+        final b = Map<String, dynamic>.from(raw);
 
-  // 👈 نقرأ UserId الحقيقي للخبير من الـ booking
-  final expertUserId = (b['expertUserId'] ?? '').toString();
-  if (expertUserId.isEmpty) continue;
+        // الكستمر جاينا من populate("customer", ...)
+        final customer =
+            (b['customer'] as Map?)?.cast<String, dynamic>() ??
+                <String, dynamic>{};
 
-  // ExpertProfile (للعرض: الاسم، الصورة، ...الخ)
-  final expert =
-      (b['expert'] as Map?)?.cast<String, dynamic>() ??
-          <String, dynamic>{};
+        final customerId = customer['_id']?.toString();
+        if (customerId == null || customerId.isEmpty) continue;
 
-  final expertName =
-      (expert['name'] ?? 'Expert').toString();
-  final avatar = (expert['profileImageUrl'] ?? '').toString();
+        final customerName =
+            (customer['name'] ?? customer['email'] ?? 'Customer')
+                .toString();
+        final customerEmail = (customer['email'] ?? '').toString();
+        final avatar = (customer['profilePic'] ?? '').toString();
 
-  final expertEmail = '';
+        final startAtStr = (b['startAt'] ?? '').toString();
+        DateTime? startAt;
+        if (startAtStr.isNotEmpty) {
+          startAt = DateTime.tryParse(startAtStr);
+        }
 
-  final startAtStr = (b['startAt'] ?? '').toString();
-  DateTime? startAt;
-  if (startAtStr.isNotEmpty) {
-    startAt = DateTime.tryParse(startAtStr);
-  }
-
-  final key = expertUserId; // 👈 المفتاح الآن هو User._id
-  if (!map.containsKey(key)) {
-    map[key] = _ExpertContact(
-      id: expertUserId,        // 👈 هذا اللي يروح للـ API تبع الشات
-      name: expertName,
-      email: expertEmail,
-      avatarUrl: avatar,
-      lastBookingAt: startAt,
-      totalBookings: 1,
-    );
-  } else {
-    final existing = map[key]!;
-    existing.totalBookings += 1;
-    if (startAt != null) {
-      if (existing.lastBookingAt == null ||
-          existing.lastBookingAt!.isBefore(startAt)) {
-        existing.lastBookingAt = startAt;
+        final key = customerId;
+        if (!map.containsKey(key)) {
+          map[key] = _CustomerContact(
+            id: customerId,
+            name: customerName,
+            email: customerEmail,
+            avatarUrl: avatar,
+            lastBookingAt: startAt,
+            totalBookings: 1,
+          );
+        } else {
+          final existing = map[key]!;
+          existing.totalBookings += 1;
+          if (startAt != null) {
+            if (existing.lastBookingAt == null ||
+                existing.lastBookingAt!.isBefore(startAt)) {
+              existing.lastBookingAt = startAt;
+            }
+          }
+        }
       }
-    }
-  }
-}
-
 
       final list = map.values.toList()
         ..sort((a, b) {
@@ -119,7 +114,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
         });
 
       setState(() {
-        _experts
+        _customers
           ..clear()
           ..addAll(list);
         _loading = false;
@@ -132,11 +127,11 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
     }
   }
 
-  Future<void> _openChatWithExpert(_ExpertContact expert) async {
+  Future<void> _openChatWithCustomer(_CustomerContact customer) async {
     try {
-      // نستخدم الـ API اللي جهزناه سابقاً
-      final conv = await ApiService.getOrCreateConversationAsCustomer(
-        expertId: expert.id,
+      // نستخدم API خاص بالخبير
+      final conv = await ApiService.getOrCreateConversationAsExpert(
+        customerId: customer.id,
       );
 
       final String convId = conv['_id'].toString();
@@ -147,8 +142,9 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
         MaterialPageRoute(
           builder: (_) => ChatPage(
             conversationId: convId,
-            otherUserName: expert.name,
-            otherUserAvatar: expert.avatarUrl.isNotEmpty ? expert.avatarUrl : null,
+            otherUserName: customer.name,
+            otherUserAvatar:
+                customer.avatarUrl.isNotEmpty ? customer.avatarUrl : null,
           ),
         ),
       );
@@ -173,7 +169,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          "Experts I worked with",
+          "My Customers",
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
@@ -224,7 +220,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: const Icon(
-                                Icons.forum,
+                                Icons.people_alt_outlined,
                                 color: Colors.white,
                                 size: 26,
                               ),
@@ -236,7 +232,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const Text(
-                                    "Stay in touch with your experts",
+                                    "Build long-term relationships",
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 16,
@@ -245,7 +241,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    "You have worked with ${_experts.length} expert(s) • Today $todayLabel",
+                                    "You have worked with ${_customers.length} customer(s) • Today $todayLabel",
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 12,
@@ -261,15 +257,15 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
 
                     const SizedBox(height: 4),
 
-                    // ===== قائمة الإكسبرتس =====
+                    // ===== قائمة العملاء =====
                     Expanded(
-                      child: _experts.isEmpty
+                      child: _customers.isEmpty
                           ? ListView(
                               children: const [
                                 SizedBox(height: 120),
                                 Center(
                                   child: Text(
-                                    "No experts yet.\nBook a session to start a conversation.",
+                                    "No customers yet.\nOnce you receive bookings, they will appear here.",
                                     style: TextStyle(
                                       color: Colors.grey,
                                       fontSize: 14,
@@ -280,16 +276,16 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                               ],
                             )
                           : RefreshIndicator(
-                              onRefresh: _loadExpertsFromBookings,
+                              onRefresh: _loadCustomersFromBookings,
                               child: ListView.separated(
                                 padding: const EdgeInsets.fromLTRB(
                                     16, 8, 16, 16),
-                                itemCount: _experts.length,
+                                itemCount: _customers.length,
                                 separatorBuilder: (_, __) =>
                                     const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
-                                  final expert = _experts[index];
-                                  return _buildExpertCard(expert);
+                                  final customer = _customers[index];
+                                  return _buildCustomerCard(customer);
                                 },
                               ),
                             ),
@@ -299,9 +295,9 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
     );
   }
 
-  Widget _buildExpertCard(_ExpertContact expert) {
-    final lastStr = expert.lastBookingAt != null
-        ? "${expert.lastBookingAt!.year}-${expert.lastBookingAt!.month.toString().padLeft(2, '0')}-${expert.lastBookingAt!.day.toString().padLeft(2, '0')}"
+  Widget _buildCustomerCard(_CustomerContact customer) {
+    final lastStr = customer.lastBookingAt != null
+        ? "${customer.lastBookingAt!.year}-${customer.lastBookingAt!.month.toString().padLeft(2, '0')}-${customer.lastBookingAt!.day.toString().padLeft(2, '0')}"
         : "—";
 
     return AnimatedContainer(
@@ -321,7 +317,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () => _openChatWithExpert(expert),
+        onTap: () => _openChatWithCustomer(customer),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -330,13 +326,13 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
               CircleAvatar(
                 radius: 26,
                 backgroundColor: _brand.withOpacity(0.15),
-                backgroundImage: expert.avatarUrl.isNotEmpty
-                    ? NetworkImage(expert.avatarUrl)
+                backgroundImage: customer.avatarUrl.isNotEmpty
+                    ? NetworkImage(customer.avatarUrl)
                     : null,
-                child: expert.avatarUrl.isEmpty
+                child: customer.avatarUrl.isEmpty
                     ? Text(
-                        expert.name.isNotEmpty
-                            ? expert.name[0].toUpperCase()
+                        customer.name.isNotEmpty
+                            ? customer.name[0].toUpperCase()
                             : '?',
                         style: const TextStyle(
                           color: _brandDark,
@@ -354,7 +350,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      expert.name,
+                      customer.name,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -362,9 +358,9 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    if (expert.email.isNotEmpty)
+                    if (customer.email.isNotEmpty)
                       Text(
-                        expert.email,
+                        customer.email,
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade700,
@@ -377,7 +373,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                             size: 16, color: Colors.grey.shade600),
                         const SizedBox(width: 4),
                         Text(
-                          "Bookings: ${expert.totalBookings}",
+                          "Bookings: ${customer.totalBookings}",
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade700,
@@ -404,11 +400,11 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
 
               // زر المسج
               FilledButton.icon(
-                onPressed: () => _openChatWithExpert(expert),
+                onPressed: () => _openChatWithCustomer(customer),
                 style: FilledButton.styleFrom(
                   backgroundColor: _brand,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(999),
                   ),
@@ -430,15 +426,15 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
   }
 }
 
-class _ExpertContact {
-  final String id;
+class _CustomerContact {
+  final String id;          // User._id للكستمر
   final String name;
   final String email;
   final String avatarUrl;
   DateTime? lastBookingAt;
   int totalBookings;
 
-  _ExpertContact({
+  _CustomerContact({
     required this.id,
     required this.name,
     required this.email,

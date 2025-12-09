@@ -326,7 +326,7 @@ export async function getCustomerBookings(req, res) {
     const query = Booking.find(match)
       .populate({
         path: "expert",
-        select: "name specialization location status",
+        select: "name specialization location status profileImageUrl",
         model: "ExpertProfile",
       })
       .populate({

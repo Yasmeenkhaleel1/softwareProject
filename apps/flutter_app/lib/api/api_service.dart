@@ -345,6 +345,47 @@ class ApiService {
     return (body['bookings'] as List?) ?? [];
   }
 
+  /// 🔹 جلب حجوزات الخبير (تُستخدم في صفحة My Customers)
+  static Future<List<dynamic>> fetchExpertBookings({
+    DateTime? from,
+    DateTime? to,
+    String? status,
+    int page = 1,
+    int limit = 200,
+  }) async {
+    final token = await getToken();
+    if (token == null) {
+      throw Exception('Not logged in');
+    }
+
+    final params = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+      if (status != null) 'status': status,
+      if (from != null) 'from': from.toUtc().toIso8601String(),
+      if (to != null) 'to': to.toUtc().toIso8601String(),
+    };
+
+    final uri = Uri.parse('$baseUrl/expert/bookings')
+        .replace(queryParameters: params);
+
+    final res = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (res.statusCode >= 400) {
+      throw Exception('Failed to load expert bookings: ${res.body}');
+    }
+
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    // listBookings بيرجع { data, total, page, pages }
+    return (body['data'] as List?) ?? [];
+  }
+
   // 🔹 إرسال تقييم للحجز (ويحدّث تقييم الخدمة)
   static Future<void> submitBookingReview({
     required String bookingId,

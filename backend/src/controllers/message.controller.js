@@ -3,6 +3,7 @@ import Conversation from "../models/conversation.model.js";
 import Message from "../models/message.model.js";
 import User from "../models/user/user.model.js";
 import Booking from "../models/booking.model.js";
+import ExpertProfile from "../models/expert/expertProfile.model.js";
 
 /**
  * Helper: يتأكد إن اليوزر جزء من المحادثة
@@ -26,7 +27,8 @@ export const listMyConversations = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const conversations = await Conversation.find({
+    // 1) نجيب كل المحادثات تبعت هذا اليوزر
+    let conversations = await Conversation.find({
       $or: [{ customer: userId }, { expert: userId }],
     })
       .sort({ updatedAt: -1 })
@@ -34,12 +36,51 @@ export const listMyConversations = async (req, res) => {
       .populate("expert", "name email profilePic role")
       .lean();
 
+    // 2) نجهز قائمة IDs للـ Experts
+    const expertUserIds = [
+      ...new Set(
+        conversations
+          .map((c) => c.expert?._id?.toString())
+          .filter(Boolean)
+      ),
+    ];
+
+    // 3) نجيب البروفايل المعتمد لكل Expert
+    const profiles = await ExpertProfile.find({
+      userId: { $in: expertUserIds },
+      status: "approved",
+    })
+      .select("userId name profileImageUrl")
+      .lean();
+
+    const profileByUserId = {};
+    for (const p of profiles) {
+      profileByUserId[p.userId.toString()] = p;
+    }
+
+    // 4) ندمج الاسم والصورة من ExpertProfile داخل expert في كل محادثة
+    conversations = conversations.map((conv) => {
+      if (conv.expert && conv.expert._id) {
+        const expertId = conv.expert._id.toString();
+        const prof = profileByUserId[expertId];
+        if (prof) {
+          // ✅ لو مافي name في User نستخدم اسم البروفايل
+          conv.expert.name = prof.name || conv.expert.name;
+          // ✅ لو مافي profilePic في User نستخدم صورة البروفايل
+          conv.expert.profilePic =
+            prof.profileImageUrl || conv.expert.profilePic;
+        }
+      }
+      return conv;
+    });
+
     return res.json({ conversations });
   } catch (e) {
     console.error("❌ listMyConversations error:", e);
     return res.status(500).json({ message: "Server error", error: e.message });
   }
 };
+
 
 /**
  * POST /api/messages/conversations
@@ -111,11 +152,29 @@ export const getOrCreateConversation = async (req, res) => {
       });
     }
 
-    const conv = await Conversation.findById(conversation._id)
-      .populate("customer", "name email profilePic role")
-      .populate("expert", "name email profilePic role");
+   const conv = await Conversation.findById(conversation._id)
+  .populate("customer", "name email profilePic role")
+  .populate("expert", "name email profilePic role")
+  .lean();
 
-    return res.json({ conversation: conv });
+// ✅ نحقن بيانات البروفايل المعتمد للخبير (لو موجود)
+if (conv.expert && conv.expert._id) {
+  const prof = await ExpertProfile.findOne({
+    userId: conv.expert._id,
+    status: "approved",
+  })
+    .select("name profileImageUrl")
+    .lean();
+
+  if (prof) {
+    conv.expert.name = prof.name || conv.expert.name;
+    conv.expert.profilePic =
+      prof.profileImageUrl || conv.expert.profilePic;
+  }
+}
+
+return res.json({ conversation: conv });
+
   } catch (e) {
     console.error("❌ getOrCreateConversation error:", e);
     return res.status(500).json({ message: "Server error", error: e.message });
