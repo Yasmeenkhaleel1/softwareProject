@@ -12,6 +12,7 @@ import 'customer_help_page.dart';
 import 'customer_calendar_page.dart';
 import 'chat/conversations_page.dart'; // ✅ صفحة المسجات الجديدة
 import 'customer_experts_page.dart'; // 👈 صفحة My Experts اللي عملناها
+import 'package:flutter_app/widgets/ai_assistant_panel.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -44,6 +45,8 @@ double _expertsPage = 0.0;
   bool _searching = false;
   bool _hasSearched = false;
   List<Map<String, dynamic>> _searchResults = [];
+
+ bool _showAiAssistant = false; 
 
   final List<String> _categories = const [
     "Design",
@@ -198,10 +201,79 @@ void dispose() {
     }
   }
 
- @override
+@override
 Widget build(BuildContext context) {
   final String userName =
       user?['name'] ?? user?['email']?.split('@')[0] ?? 'User';
+
+  // 👇 نفس الـ body اللي كان عندك، بس حطيناه في متغيّر عشان ندخله جوّا Stack
+  final Widget mainBody = loading
+      ? const Center(child: CircularProgressIndicator())
+      : RefreshIndicator(
+          onRefresh: () async {
+            await fetchUser();
+            await fetchExperts();
+            if (_hasSearched) await _searchServices();
+          },
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 1) Hero
+                    ScrollReveal(
+                      delay: const Duration(milliseconds: 0),
+                      child: _buildWelcomeBanner(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 2) Search
+                    ScrollReveal(
+                      delay: const Duration(milliseconds: 120),
+                      child: _buildSearchAndFilters(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 3) Results
+                    ScrollReveal(
+                      delay: const Duration(milliseconds: 220),
+                      child: _buildSearchResultsSection(),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // 4) Recommended experts
+                    ScrollReveal(
+                      delay: const Duration(milliseconds: 320),
+                      child: _buildRecommendedSectionCard(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 5) Experts Carousel
+                    ScrollReveal(
+                      delay: const Duration(milliseconds: 420),
+                      child: _buildExpertsSectionCard(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 6) Categories
+                    ScrollReveal(
+                      delay: const Duration(milliseconds: 520),
+                      child: _buildCategoriesSectionCard(),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
 
   return Scaffold(
     backgroundColor: const Color(0xFFF3F7FA),
@@ -209,85 +281,52 @@ Widget build(BuildContext context) {
       preferredSize: const Size.fromHeight(70),
       child: _buildTopBar(userName),
     ),
+
+    // 🟢 زر الشات بوت – يفتح/يغلق الـ Panel بدل SnackBar
     floatingActionButton: FloatingActionButton.extended(
       backgroundColor: accentColor,
       icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
       label: const Text("Chatbot", style: TextStyle(color: Colors.white)),
       onPressed: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("🤖 AI Chatbot coming soon...")),
-        );
+        setState(() {
+          _showAiAssistant = !_showAiAssistant;
+        });
       },
     ),
-    body: loading
-        ? const Center(child: CircularProgressIndicator())
-        : RefreshIndicator(
-            onRefresh: () async {
-              await fetchUser();
-              await fetchExperts();
-              if (_hasSearched) await _searchServices();
-            },
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1100),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 24,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1) Hero
-                      ScrollReveal(
-                        delay: const Duration(milliseconds: 0),
-                        child: _buildWelcomeBanner(),
-                      ),
-                      const SizedBox(height: 24),
 
-                      // 2) Search
-                      ScrollReveal(
-                        delay: const Duration(milliseconds: 120),
-                        child: _buildSearchAndFilters(),
-                      ),
-                      const SizedBox(height: 24),
+    // 🟢 Stack: الداشبورد + الشات بوت فوقه في نفس الشاشة
+    body: Stack(
+      children: [
+        mainBody,
 
-                      // 3) Results
-                      ScrollReveal(
-                        delay: const Duration(milliseconds: 220),
-                        child: _buildSearchResultsSection(),
-                      ),
-                      const SizedBox(height: 32),
-
-                      // 4) Recommended experts
-                      ScrollReveal(
-                        delay: const Duration(milliseconds: 320),
-                        child: _buildRecommendedSectionCard(),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // 5) Experts Carousel
-                      ScrollReveal(
-                        delay: const Duration(milliseconds: 420),
-                        child: _buildExpertsSectionCard(),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // 6) Categories
-                      ScrollReveal(
-                        delay: const Duration(milliseconds: 520),
-                        child: _buildCategoriesSectionCard(),
-                      ),
-                      const SizedBox(height: 40),
-                    ],
-                  ),
+        if (_showAiAssistant)
+          Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.only(
+                right: 24,
+                bottom: 90, // عشان ما يغطيه الـ FAB
+              ),
+              child: SizedBox(
+                width: 420,
+                height: 520,
+                child: AiAssistantPanel( // 👈 الودجت اللي عملناه للشات بوت
+                  userName: userName,
+                  userId: user?['_id']?.toString() ?? '',
+                  onClose: () {
+                    setState(() {
+                      _showAiAssistant = false;
+                    });
+                  },
                 ),
               ),
             ),
           ),
+      ],
+    ),
   );
 }
+
 
 
   // ========================= TOP BAR =========================
