@@ -1,7 +1,13 @@
 // src/services/aiAssistant.service.js
+import OpenAI from "openai";
 import Booking from "../models/booking.model.js";
 import Service from "../models/expert/service.model.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
+
+// ✅ عميل OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 /**
  * 🧠 1) Rules ثابتة للأسئلة الشائعة
@@ -9,6 +15,80 @@ import ExpertProfile from "../models/expert/expertProfile.model.js";
  */
 function applyRules(rawQuestion, context) {
   const q = (rawQuestion || "").toString().toLowerCase().trim();
+
+  // ============================
+  // 1) عدد الحجوزات الفعّالة
+  // ============================
+  const activeCountKeywords = [
+    "كم حجز فعال",
+    "كم حجز فعّال",
+    "حجوزات فعالة",
+    "حجوزاتي الفعالة",
+    "active bookings",
+    "do i have active bookings",
+    "any active booking"
+  ];
+  if (activeCountKeywords.some((k) => q.includes(k))) {
+    const n = context.activeBookingsCount || 0;
+    return {
+      matched: true,
+      answer:
+        "📊 **الحجوزات الفعّالة حاليًا**\n\n" +
+        (n > 0
+          ? `- عندك حاليًا **${n}** حجز/حجوزات فعّالة (حالتها PENDING أو CONFIRMED أو IN_PROGRESS).\n`
+          : "- ما عندك أي حجوزات فعّالة في الوقت الحالي.\n"),
+    };
+  }
+
+  // ============================
+  // 2) إجمالي عدد الحجوزات
+  // ============================
+  const totalCountKeywords = [
+    "كم حجز عندي",
+    "كم مرة حجزت",
+    "كم عدد حجوزاتي",
+    "total bookings",
+    "كم حجز عملت على المنصة",
+    "كم حجز عملت على المنصه بشكل عام",
+  ];
+  if (totalCountKeywords.some((k) => q.includes(k))) {
+    const n = context.totalBookingsCount || 0;
+    return {
+      matched: true,
+      answer:
+        "📊 **إجمالي حجوزاتك على المنصّة**\n\n" +
+        (n > 0
+          ? `- لحد الآن عملت **${n}** حجز/حجوزات على المنصّة.\n`
+          : "- لسه ما عندك أي حجز على المنصّة.\n"),
+    };
+  }
+
+  // ============================
+  // 3) تفاصيل آخر حجز
+  // ============================
+  const lastBookingKeywords = [
+    "اخر حجز",
+    "آخر حجز",
+    "اخر جلسة",
+    "آخر جلسة",
+    "آخر موعد",
+    "last booking",
+    "last session",
+  ];
+  if (lastBookingKeywords.some((k) => q.includes(k))) {
+    const summary = context.latestBookingSummary || "No previous bookings.";
+    return {
+      matched: true,
+      answer:
+        "🕒 **تفاصيل آخر حجز عندك:**\n\n" +
+        summary +
+        "\nلو حابة أشرح لك حالة الحجز أو الخطوة الجاية، اسأليني 😊",
+    };
+  }
+
+  // ============================
+  // 4) باقي الرولز القديمة
+  // ============================
 
   // مثال: أسئلة عن إلغاء الحجز
   const cancelKeywords = ["cancel booking", "الغاء الحجز", "إلغاء الحجز", "cancel my session"];
@@ -151,20 +231,33 @@ export async function buildCustomerContext(userId) {
 }
 
 /**
- * 🧠 3) استدعاء نموذج الذكاء الاصطناعي (Placeholder)
- * - هنا تضيف Integration مع OpenAI / أي موديل آخر
+ * 🧠 3) استدعاء نموذج الذكاء الاصطناعي الحقيقي (OpenAI)
  */
 async function callLLM({ systemPrompt, userMessage, history, context }) {
-  // ⚠️ Placeholder:
-  // هنا بتحطي كود الاستدعاء الحقيقي لمزوّد الـ AI (OpenAI أو غيره)
-  // وتستخدمي systemPrompt + history + userMessage + context ضمن prompt واحد.
+  // لو ما في API KEY → لا نكسر السيرفر
+  if (!process.env.OPENAI_API_KEY) {
+    return "عذرًا، المساعد الذكي غير مفعّل حاليًا لأن مفتاح الـ API غير مضبوط على السيرفر.";
+  }
 
-  const fakeAnswer =
-    "أنا مساعد المنصّة الذكي 🤖.\n" +
-    "حالياً هذا رد تجريبي (Placeholder) من الـ Backend.\n" +
-    "انتي ممكن تربطي هذا المكان مع أي API حقيقي للذكاء الاصطناعي لاحقًا.";
+  const messages = [
+    { role: "developer", content: systemPrompt },
+    { role: "system", content: context },
+    ...(history || []),
+    { role: "user", content: userMessage },
+  ];
 
-  return fakeAnswer;
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5.1", // تقدري تغيّريها لموديل آخر مفعّل عندك
+    messages,
+    temperature: 0.6,
+    max_tokens: 600,
+  });
+
+  const reply = completion.choices?.[0]?.message?.content?.trim();
+  return (
+    reply ||
+    "عذرًا، لم أستطع توليد رد الآن. يرجى المحاولة مرة أخرى لاحقًا."
+  );
 }
 
 /**
@@ -192,13 +285,14 @@ export async function generateAssistantReply({
 
   // 3) لو مافي Rule مطابق → نروح للـ AI
   const systemPrompt =
-    "You are an AI assistant for an online booking platform that connects customers with experts. " +
+    "You are an AI assistant for an online booking platform called Lost Treasures " +
+    "that connects customers with experts. " +
     "You speak Arabic in a simple, clear way, but you can also use English terms for technical words (like status names). " +
     "You must always be honest about what the system can and cannot do. " +
     "Never promise features that do not exist. " +
     "Use the given CONTEXT about the user's bookings when answering.\n";
 
-  // نحضّر History نصي بسيط (اختياري)
+  // نحضّر History بصيغة ChatGPT (role + content)
   const historyForModel = (historyMessages || []).map((m) => ({
     role: m.role,
     content: m.content,
