@@ -7,8 +7,12 @@ import 'package:flutter/foundation.dart'
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '/api/api_service.dart';
-import 'dart:js' as js;
-import 'dart:js_util' as js_util; 
+import '../config/api_config.dart';
+
+import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+
 /*───────────────────────────────────────────────────────────────
   CARD VALIDATION HELPERS
 ───────────────────────────────────────────────────────────────*/
@@ -77,19 +81,28 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
   List<dynamic> services = [];
   bool loading = true;
 
- String _resolveBaseUrl() {
-  return "http://localhost:5000";
+  String _resolveBaseUrl() {
+  return ApiConfig.baseUrl;
 }
 
-
   // ✅ إصلاح روابط الصور للويب
-  String _fixImageUrl(String url) {
-    if (url.isEmpty) return url;
-    if (kIsWeb && url.contains("localhost")) {
-      return url.replaceAll("localhost", "127.0.0.1");
-    }
-    return url;
+ String _fixImageUrl(String url) {
+  if (url.isEmpty) return url;
+
+  // 🌐 Web → استخدم 127.0.0.1 بدل localhost
+  if (kIsWeb && url.contains("localhost")) {
+    return url.replaceAll("localhost", "127.0.0.1");
   }
+
+  // 📱 Android Emulator → استخدم 10.0.2.2
+  if (!kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.android &&
+      url.contains("localhost")) {
+    return url.replaceAll("localhost", "10.0.2.2");
+  }
+
+  return url;
+}
 
   Future<String> _token() async {
     final t = await ApiService.getToken();
@@ -115,11 +128,8 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
     return v?.toString();
   }
 
-  /// ✅ هنا أهم تعديل:
-  /// لحجز المواعيد لازم نستخدم ExpertProfile._id (نفس اللي في Postman)
-  /// عشان /calendar-status و /services يشتغلوا صح.
+  /// ID الخبير المستخدم في الحجز
   String? _bookingExpertId() {
-    // نأخذ الـ _id من الـ profile إن وجد، وإلا من widget.expert
     return _expertIdFromAny(profile ?? widget.expert);
   }
 
@@ -130,7 +140,6 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
     _load();
   }
 
-  // ✅ استخدمنا public endpoints + تصحيح الحقول
   Future<void> _load() async {
     setState(() => loading = true);
     final expertId = _expertIdFromAny(widget.expert);
@@ -181,7 +190,9 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
       appBar: AppBar(
         title: Text(fallbackName),
         backgroundColor: const Color(0xFF62C6D9),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+        ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
@@ -240,18 +251,24 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
           bottom: 12,
           child: Row(children: [
             const CircleAvatar(
-                radius: 26,
-                backgroundColor: Color(0xFF62C6D9),
-                child: Icon(Icons.person, color: Colors.white)),
+              radius: 26,
+              backgroundColor: Color(0xFF62C6D9),
+              child: Icon(Icons.person, color: Colors.white),
+            ),
             const SizedBox(width: 12),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name,
-                  style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
-              Text(specialty,
-                  style: const TextStyle(color: Colors.white70)),
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              Text(
+                specialty,
+                style: const TextStyle(color: Colors.white70),
+              ),
             ])
           ]),
         )
@@ -275,8 +292,10 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
           ),
         ),
         if (services.isEmpty)
-          const Text("No published services yet.",
-              style: TextStyle(color: Colors.grey)),
+          const Text(
+            "No published services yet.",
+            style: TextStyle(color: Colors.grey),
+          ),
         ...services.map((s) => _serviceCard(s as Map<String, dynamic>)).toList(),
       ],
     );
@@ -289,13 +308,10 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
     final currency = (s["currency"] ?? "USD").toString();
     final duration = int.tryParse("${s["durationMinutes"] ?? 60}") ?? 60;
 
-    // ✅ استخرج أول صورة
     String cover = "";
     if (s["images"] != null && s["images"] is List && s["images"].isNotEmpty) {
       cover = s["images"][0].toString();
     }
-
-    // ✅ استخدمنا دالة تصحيح الرابط للويب
     final imgUrl = _fixImageUrl(cover);
 
     return Card(
@@ -353,20 +369,28 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
             Row(
               children: [
                 const Icon(Icons.attach_money, size: 15, color: Colors.grey),
-                Text("$price $currency",
-                    style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                Text(
+                  "$price $currency",
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                ),
                 const SizedBox(width: 10),
                 const Icon(Icons.timer, size: 15, color: Colors.grey),
-                Text("$duration min",
-                    style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                Text(
+                  "$duration min",
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                ),
               ],
             ),
           ],
         ),
         trailing: TextButton(
-          child: const Text("Book",
-              style: TextStyle(
-                  color: Color(0xFF62C6D9), fontWeight: FontWeight.w600)),
+          child: const Text(
+            "Book",
+            style: TextStyle(
+              color: Color(0xFF62C6D9),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           onPressed: () {
             final expertId = _bookingExpertId();
             final serviceId = (s["_id"] ?? s["id"])?.toString();
@@ -453,9 +477,10 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(category,
-                    style:
-                        const TextStyle(color: Colors.teal, fontSize: 15)),
+                Text(
+                  category,
+                  style: const TextStyle(color: Colors.teal, fontSize: 15),
+                ),
                 const Divider(height: 20),
                 Row(
                   children: [
@@ -472,15 +497,16 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
                 const Text(
                   "Description",
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.black87),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.black87,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   desc,
-                  style: const TextStyle(
-                      fontSize: 14, color: Colors.black87),
+                  style:
+                      const TextStyle(fontSize: 14, color: Colors.black87),
                 ),
                 const SizedBox(height: 20),
                 Align(
@@ -490,14 +516,16 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF62C6D9),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     onPressed: () => Navigator.pop(context),
                     label: const Text(
                       "Close",
                       style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -541,7 +569,7 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
   List<dynamic> days = [];
   String? error;
 
-  String? _selectedDate; // "YYYY-MM-DD"
+  String? _selectedDate;
   List<dynamic> _selectedSlots = [];
 
   @override
@@ -554,7 +582,6 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
     try {
       final token = await ApiService.getToken();
 
-      // ✅ نطاق الأيام: من اليوم + 14 يوم (مثل مواقع الحجز العالمية)
       final now = DateTime.now();
       final fromDate = DateTime(now.year, now.month, now.day);
       final toDate = fromDate.add(const Duration(days: 14));
@@ -568,16 +595,19 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
       final uri = Uri.parse(
           "${widget.baseUrl}/api/public/experts/${widget.expertId}/calendar-status?from=$fromStr&to=$toStr&durationMinutes=${widget.durationMinutes}");
 
-      final res = await http.get(uri, headers: {
-        'Content-Type': 'application/json',
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      });
+      final res = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        },
+      );
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         days = data['days'] ?? [];
 
-        // ✅ اختر أول يوم فيه Slots متاحة
         if (days.isNotEmpty) {
           final firstWithSlots = days.firstWhere(
             (d) => (d['slots'] ?? []).isNotEmpty,
@@ -603,33 +633,30 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
     });
   }
 
-  // ✅ NEW: فتح لوحة الدفع في يسار الشاشة
-void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
-  final customerId = await widget.getCustomerId();
-  if (customerId == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Please login to book a session.")),
+  void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
+    final customerId = await widget.getCustomerId();
+    if (customerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to book a session.")),
+      );
+      return;
+    }
+
+    final serviceId = (widget.service["_id"] ?? widget.service["id"])?.toString();
+    if (serviceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Service id missing.")),
+      );
+      return;
+    }
+
+    _showPaymentSheet(
+      context: context,
+      slot: slot,
+      customerId: customerId,
+      serviceId: serviceId,
     );
-    return;
   }
-
-  final serviceId = (widget.service["_id"] ?? widget.service["id"])?.toString();
-  if (serviceId == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Service id missing.")),
-    );
-    return;
-  }
-
-  _showPaymentSheet(
-    context: context,
-    slot: slot,
-    customerId: customerId,
-    serviceId: serviceId,
-  );
-}
-
-
 
   void _showPaymentSheet({
     required BuildContext context,
@@ -637,53 +664,82 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
     required String customerId,
     required String serviceId,
   }) {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "Payment",
-      pageBuilder: (_, __, ___) {
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: SafeArea(
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: 420, // 🌍 مناسب للويب واللابتوب
-                height: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 16,
-                      offset: Offset(4, 0),
-                      color: Colors.black26,
-                    )
-                  ],
-                ),
-                child: _PaymentSideSheet(
-                  baseUrl: widget.baseUrl,
-                  expertId: widget.expertId,
-                  service: widget.service,
-                  serviceId: serviceId,
-                  price: widget.price,
-                  currency: widget.currency,
-                  slot: slot,
-                  getCustomerId: widget.getCustomerId,
+    if (kIsWeb) {
+      // 🌐 Web: side sheet من اليسار (زي ما كان)
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: "Payment",
+        pageBuilder: (_, __, ___) {
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: SafeArea(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 420,
+                  height: double.infinity,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        blurRadius: 16,
+                        offset: Offset(4, 0),
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                  child: _PaymentSideSheet(
+                    baseUrl: widget.baseUrl,
+                    expertId: widget.expertId,
+                    service: widget.service,
+                    serviceId: serviceId,
+                    price: widget.price,
+                    currency: widget.currency,
+                    slot: slot,
+                    getCustomerId: widget.getCustomerId,
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-      transitionDuration: const Duration(milliseconds: 220),
-      transitionBuilder: (_, anim, __, child) {
-        final offset = Tween<Offset>(
-          begin: const Offset(-1, 0),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut));
-        return SlideTransition(position: offset, child: child);
-      },
-    );
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 220),
+        transitionBuilder: (_, anim, __, child) {
+          final offset = Tween<Offset>(
+            begin: const Offset(-1, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut));
+          return SlideTransition(position: offset, child: child);
+        },
+      );
+    } else {
+      // 📱 Mobile: BottomSheet full-width
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        ),
+        builder: (_) {
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.75,
+              child: _PaymentSideSheet(
+                baseUrl: widget.baseUrl,
+                expertId: widget.expertId,
+                service: widget.service,
+                serviceId: serviceId,
+                price: widget.price,
+                currency: widget.currency,
+                slot: slot,
+                getCustomerId: widget.getCustomerId,
+              ),
+            ),
+          );
+        },
+      );
+    }
   }
 
   Color _statusColor(String status) {
@@ -702,7 +758,9 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
   Widget build(BuildContext context) {
     if (loading) {
       return const SizedBox(
-          height: 320, child: Center(child: CircularProgressIndicator()));
+        height: 320,
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
     if (error != null) {
       return SizedBox(
@@ -733,7 +791,7 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔹 Header
+            // Header
             Row(
               children: [
                 Expanded(
@@ -748,7 +806,7 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
                 IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => Navigator.pop(context),
-                )
+                ),
               ],
             ),
             Text(
@@ -763,11 +821,13 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
             Text(
               "${widget.price} ${widget.currency} • ${widget.durationMinutes} min",
               style: TextStyle(
-                  color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             const SizedBox(height: 12),
 
-            // 🔹 Legend (الألوان)
+            // Legend
             Row(
               children: [
                 _legendDot(Colors.teal, "Available"),
@@ -779,7 +839,7 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
             ),
             const SizedBox(height: 12),
 
-            // 🔹 Days horizontal list
+            // Days horizontal
             SizedBox(
               height: 78,
               child: ListView.separated(
@@ -811,7 +871,9 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: hasSlots ? bgColor : Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(10),
@@ -832,8 +894,9 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
                             style: TextStyle(
                               fontSize: 11,
                               color: hasSlots ? baseColor : Colors.grey,
-                              fontWeight:
-                                  isSelected ? FontWeight.bold : FontWeight.w500,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -865,7 +928,7 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
 
             const SizedBox(height: 12),
 
-            // 🔹 Slots grid
+            // Slots grid
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
@@ -960,7 +1023,7 @@ void _bookSlot(BuildContext context, Map<String, dynamic> slot) async {
 }
 
 /*───────────────────────────────────────────────────────────────
-  PAYMENT SIDE SHEET (LEFT PANEL)
+  PAYMENT SIDE SHEET
 ───────────────────────────────────────────────────────────────*/
 class _PaymentSideSheet extends StatefulWidget {
   final String baseUrl;
@@ -1004,137 +1067,126 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
     super.dispose();
   }
 
-   Future<void> _submit() async {
-    // 🔐 الدفع عبر Stripe شغال للويب فقط حالياً
-    if (!kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Stripe payment is only available on web for now."),
-        ),
-      );
-      return;
-    }
+  Future<void> _submit() async {
+  final customerId = await widget.getCustomerId();
 
-    final customerId = await widget.getCustomerId();
-
-    if (customerId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please login to complete payment.")),
-      );
-      return;
-    }
-
-    setState(() => _submitting = true);
-
-    try {
-      // ------------------------------------------------------
-      // 1) إنشاء الحجز بحالة PENDING
-      // ------------------------------------------------------
-      final startStr = widget.slot['startAt'] as String;
-      final endStr   = widget.slot['endAt']   as String;
-
-      final bookingRes = await ApiService.createPublicBooking(
-        expertId: widget.expertId,
-        serviceId: widget.serviceId,
-        customerId: customerId,
-        startAtIso: DateTime.parse(startStr).toUtc().toIso8601String(),
-        endAtIso:   DateTime.parse(endStr).toUtc().toIso8601String(),
-        timezone: "Asia/Hebron",
-        note: "",
-      );
-
-      final booking   = bookingRes["booking"];
-      final bookingId = booking["_id"];
-
-      // ------------------------------------------------------
-      // 2) إنشاء PaymentIntent في السيرفر
-      // ------------------------------------------------------
-      final intentRes = await ApiService.createStripeIntent(
-        amount:        widget.price.toDouble(),
-        currency:      widget.currency,
-        customerId:    customerId,
-        expertProfileId: widget.expertId,
-        serviceId:     widget.serviceId,
-        bookingId:     bookingId,
-      );
-
-      final clientSecret = intentRes["clientSecret"];
-      final paymentId    = intentRes["paymentId"];
-
-      if (clientSecret == null || paymentId == null) {
-        throw Exception("Missing clientSecret or paymentId from backend.");
-      }
-
-      // ------------------------------------------------------
-      // 3) فتح Stripe Elements (الكرت الحقيقي على الويب)
-      //    openStripeCardForm ترجع Promise → لازم نستعمل promiseToFuture
-      // ------------------------------------------------------
-      final resultJson = await js_util.promiseToFuture<String>(
-        js.context.callMethod(
-          "openStripeCardForm",
-          [clientSecret],
-        ),
-      );
-
-      final result = jsonDecode(resultJson);
-
-      if (result["error"] != null) {
-        throw Exception(result["error"]);
-      }
-
-      final paymentIntentId = result["paymentIntentId"];
-      final paymentMethodId = result["paymentMethodId"];
-
-      // ------------------------------------------------------
-      // 4) تأكيد الدفع في الباكند
-      // ------------------------------------------------------
-      await ApiService.confirmStripeIntent(
-        paymentId:       paymentId,
-        paymentIntentId: paymentIntentId,
-        paymentMethodId: paymentMethodId,
-      );
-
- // 5) SUCCESS — show dialog & close payment panel
-if (!mounted) return;
-
-// إغلاق Panel الدفع
-Navigator.of(context).pop();
-
-// عرض Dialog نجاح
-await showDialog(
-  context: context,
-  builder: (_) => AlertDialog(
-    shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12)),
-    title: const Text(
-      "Booking Requested",
-      style: TextStyle(fontWeight: FontWeight.bold),
-    ),
-    content: const Text(
-      "Your booking has been created successfully.\n"
-      "Please wait for the expert's approval.",
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text("OK"),
+  if (customerId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Please login to complete payment."),
       ),
-    ],
-  ),
-);
-
-
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Payment failed: $e")),
-      );
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
+    );
+    return;
   }
 
+  setState(() => _submitting = true);
 
+  try {
+    // 1) إنشاء الحجز بحالة PENDING
+    final startStr = widget.slot['startAt'] as String;
+    final endStr   = widget.slot['endAt']   as String;
+
+    final bookingRes = await ApiService.createPublicBooking(
+      expertId: widget.expertId,
+      serviceId: widget.serviceId,
+      customerId: customerId,
+      startAtIso: DateTime.parse(startStr).toUtc().toIso8601String(),
+      endAtIso:   DateTime.parse(endStr).toUtc().toIso8601String(),
+      timezone: "Asia/Hebron",
+      note: "",
+    );
+
+    final booking   = bookingRes["booking"];
+    final bookingId = booking["_id"];
+
+    // 2) إنشاء PaymentIntent في الباك إند
+    final intentRes = await ApiService.createStripeIntent(
+      amount:        widget.price.toDouble(),
+      currency:      widget.currency,
+      customerId:    customerId,
+      expertProfileId: widget.expertId,
+      serviceId:     widget.serviceId,
+      bookingId:     bookingId,
+    );
+
+    final clientSecret = intentRes["clientSecret"];
+    final paymentId    = intentRes["paymentId"];
+
+    if (clientSecret == null || paymentId == null) {
+      throw Exception("Missing clientSecret or paymentId from backend.");
+    }
+
+    // 3) تهيئة الـ PaymentSheet (تشتغل ويب + موبايل)
+    await Stripe.instance.initPaymentSheet(
+      paymentSheetParameters: SetupPaymentSheetParameters(
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: 'Lost Treasures',
+        style: ThemeMode.light,
+      ),
+    );
+
+    // 4) عرض الـ PaymentSheet (واجهة الكرت)
+    await Stripe.instance.presentPaymentSheet();
+
+   // 5) جلب الـ PaymentIntent بعد النجاح للحصول على الـ id / payment_method
+    final paymentIntent =
+        await Stripe.instance.retrievePaymentIntent(clientSecret);
+
+    final paymentIntentId = paymentIntent.id;
+    final paymentMethodId = paymentIntent.paymentMethodId;
+
+    if (paymentMethodId == null) {
+      throw Exception("Missing payment method from Stripe PaymentIntent");
+    }
+
+    // 6) تأكيد الدفع في الباك إند (تحديث Payment في الداتابيس)
+    await ApiService.confirmStripeIntent(
+      paymentId:       paymentId,
+      paymentIntentId: paymentIntentId,
+      paymentMethodId: paymentMethodId, // ✅ الآن String مش String?
+    );
+
+    if (!mounted) return;
+
+    // إغلاق Panel الدفع
+    Navigator.of(context).pop();
+
+    // Dialog نجاح
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          "Booking Requested",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          "Your booking has been created successfully.\n"
+          "Please wait for the expert's approval.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  } on StripeException catch (e) {
+    // خطأ من Stripe (إلغاء من المستخدم أو مشكلة في الكرت)
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Payment cancelled: ${e.error.localizedMessage}")),
+    );
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Payment failed: $e")),
+    );
+  } finally {
+    if (mounted) setState(() => _submitting = false);
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1214,8 +1266,11 @@ await showDialog(
                           const Icon(Icons.calendar_today,
                               size: 16, color: Colors.grey),
                           const SizedBox(width: 6),
-                          Text(dateLabel,
-                              style: const TextStyle(color: Colors.black87)),
+                          Text(
+                            dateLabel,
+                            style:
+                                const TextStyle(color: Colors.black87),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -1224,8 +1279,11 @@ await showDialog(
                           const Icon(Icons.access_time,
                               size: 16, color: Colors.grey),
                           const SizedBox(width: 6),
-                          Text(timeLabel,
-                              style: const TextStyle(color: Colors.black87)),
+                          Text(
+                            timeLabel,
+                            style:
+                                const TextStyle(color: Colors.black87),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -1249,49 +1307,56 @@ await showDialog(
 
                 const SizedBox(height: 16),
 
+                const Text(
+                  "Secure payment",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF285E6E),
+                  ),
+                ),
+                const Text(
+                  "You will enter your card details in a secure Stripe form.\n"
+                  "Your card data never touches our servers.",
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
                 const SizedBox(height: 16),
 
-const Text(
-  "Secure payment",
-  style: TextStyle(
-    fontWeight: FontWeight.bold,
-    fontSize: 16,
-    color: Color(0xFF285E6E),
-  ),
-),
-
-const Text(
-  "You will enter your card details in a secure Stripe form.\n"
-  "Your card data never touches our servers.",
-  style: TextStyle(fontSize: 13, color: Colors.grey),
-),
-
-const SizedBox(height: 16),
-
-ElevatedButton.icon(
+               ElevatedButton.icon(
   icon: const Icon(Icons.credit_card),
-  label: const Text(
-    "Pay with Stripe",
-    style: TextStyle(fontWeight: FontWeight.bold),
+  label: Text(
+    _submitting
+        ? "Processing..."
+        : (kIsWeb ? "Payments not available on Web yet" : "Pay with Stripe"),
+    style: const TextStyle(fontWeight: FontWeight.bold),
   ),
   style: ElevatedButton.styleFrom(
-    backgroundColor: Color(0xFF62C6D9),
+    backgroundColor: const Color(0xFF62C6D9),
     foregroundColor: Colors.white,
     padding: const EdgeInsets.symmetric(vertical: 12),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(10),
     ),
   ),
-  onPressed: _submitting ? null : _submit,
+  onPressed: _submitting
+      ? null
+      : (kIsWeb
+          ? () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    "Online payment is not supported on Web yet. Please use the mobile app.",
+                  ),
+                ),
+              );
+            }
+          : _submit),
 ),
 
               ],
             ),
           ),
         ),
-
-        
-       
       ],
     );
   }

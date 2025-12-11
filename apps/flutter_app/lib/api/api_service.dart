@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart'; 
+import '../config/api_config.dart';
+
 class ApiService {
   // 🔥 لأن المشروع يعمل فقط على الويب → نستخدم localhost دائماً
-  static const String baseUrl = "http://localhost:5000/api";
+  static String get baseUrl => "${ApiConfig.baseUrl}/api";
+
 
   // 🔹 Get stored token
   static Future<String?> getToken() async {
@@ -606,5 +609,43 @@ class ApiService {
     return first;
   }
 
+
+// =======================
+//  AI Assistant
+// =======================
+static Future<String> askAssistant({
+  required String question,
+  Map<String, dynamic>? extraContext,
+}) async {
+  final token = await getToken();
+
+  // 👈 مهم: لو عندك الراوت /api/ai/chat استخدميه
+  final uri = Uri.parse("$baseUrl/assistant/chat");
+
+  final res = await http.post(
+    uri,
+    headers: {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    },
+    body: jsonEncode({
+      'message': question,
+      if (extraContext != null) 'context': extraContext,
+    }),
+  );
+
+  final body = jsonDecode(res.body) as Map<String, dynamic>;
+
+  if (res.statusCode >= 400) {
+    throw Exception(body['error'] ?? body['message'] ?? 'Assistant error');
+  }
+
+  // 👈 هنا التعديل المهم:
+  // نحاول نقرأ reply أولاً، ولو مش موجود نرجع answer أو message
+  final dynamic raw =
+      body['reply'] ?? body['answer'] ?? body['message'] ?? 'Sorry, I could not answer that.';
+
+  return raw.toString();
+}
 
 }

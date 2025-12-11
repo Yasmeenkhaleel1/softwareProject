@@ -1,17 +1,20 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'dart:js' as js; // ⬅ لدعم استدعاء JS في الويب
-import 'package:flutter/foundation.dart'; // ⬅ لتفعيل kIsWeb
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+
+// config + providers
+import 'config/api_config.dart';
 import 'providers/bookings_provider.dart';
 
 // pages
@@ -25,20 +28,20 @@ import 'pages/expert_dashboard_page.dart';
 import 'pages/waiting_approval_page.dart';
 import 'pages/customer_dashboard_page.dart';
 import 'pages/customer_profile_page.dart';
-
 import 'pages/ExpertDetailPage.dart';
 import 'pages/admin_dashboard_page.dart';
+import 'pages/expert_earnings_page.dart';
 
 import 'services/auth_service.dart';
-import 'config/api_config.dart';
-import 'pages/expert_earnings_page.dart';
+
 // ----------------------------------------------------------------------------
-//🔥 استقبال الإشعارات في الخلفية Background
+//🔥 FCM Background Handler + Local Notifications
 // ----------------------------------------------------------------------------
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  print("📩 Background Notification:");
-  print("➡ ${message.notification?.title} | ${message.notification?.body}");
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  debugPrint("📩 BG Notification: ${message.notification?.title}");
 }
 
 late FlutterLocalNotificationsPlugin localNoti;
@@ -49,18 +52,27 @@ late FlutterLocalNotificationsPlugin localNoti;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ✅ 1) Stripe فقط للموبايل / الديسكتوب (ليس للويب)
+  if (!kIsWeb) {
+    Stripe.publishableKey = ApiConfig.stripePublishableKey;
+    Stripe.merchantIdentifier = 'lost.treasures.app';
+    await Stripe.instance.applySettings();
+  }
+
+  // ✅ 2) Firebase (مش مشكلة يشتغل على الويب كمان)
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // ✅ 3) إشعارات الخلفية + local notifications فقط لغير الويب
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // Local Notification (تجهيزها)
   localNoti = FlutterLocalNotificationsPlugin();
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
   const initSettings = InitializationSettings(android: androidInit);
   await localNoti.initialize(initSettings);
 
+  // ✅ 4) تشغيل التطبيق
   runApp(
     MultiProvider(
       providers: [
@@ -89,39 +101,25 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
   void initState() {
     super.initState();
     _checkLoginStatus();
-    _initNotifications(); // ⬅ فقط لعرض الإشعار (الـ token في PushNotificationService)
+    _initNotifications();
   }
 
-  // ✅ هنا فقط نجهز listener لعرض الإشعار
+  // ✅ تجهيز الاستماع للإشعارات في الـ Foreground
   Future<void> _initNotifications() async {
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    final messaging = FirebaseMessaging.instance;
 
-    // فقط نطبع حالة الإذن (اختياري، لا نطلبه مرة ثانية)
     final settings = await messaging.getNotificationSettings();
-    print("🔔 Notification settings: ${settings.authorizationStatus}");
+    debugPrint("🔔 Notification settings: ${settings.authorizationStatus}");
 
-    // 📥 Foreground Notification
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print("📥 Foreground Notification Received");
-      print("➡ ${message.notification?.title}");
-      print("➡ ${message.notification?.body}");
+      debugPrint("📥 Foreground Notification Received");
+      debugPrint("➡ ${message.notification?.title}");
+      debugPrint("➡ ${message.notification?.body}");
 
       final title = message.notification?.title ?? "Notification";
       final body = message.notification?.body ?? "";
 
-    if (kIsWeb) {
-  try {
-    js.context.callMethod('showFlutterNotification', [
-      title,
-      body,
-    ]);
-  } catch (e) {
-    print("JS error: $e");
-  }
-}
-
- else {
-        // 📱 Android / Windows ... الخ
+      if (!kIsWeb) {
         localNoti.show(
           0,
           title,
@@ -135,6 +133,8 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
             ),
           ),
         );
+      } else {
+        debugPrint("🌐 Web notification: $title | $body");
       }
     });
   }
@@ -223,17 +223,14 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
             userRole: _role,
           );
         }
-
       case 'CUSTOMER':
         return LandingPage(
           isLoggedIn: true,
           onLogout: _logout,
           userRole: _role,
         );
-
       case 'ADMIN':
         return const AdminDashboardPage();
-
       default:
         return LandingPage(
           isLoggedIn: _isLoggedIn,
@@ -284,14 +281,8 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
         '/customer_dashboard_page': (context) => const CustomerHomePage(),
         '/customer_profile_page': (context) => const CustomerProfilePage(),
         '/admin_dashboard_page': (context) => const AdminDashboardPage(),
-
-   
-       
-        '/expert_details': (context) => ExpertDetailPage(
-              expert: const {},
-            ),
-
-         '/expert_earnings': (context) => const ExpertEarningsPage(),
+        '/expert_details': (context) => ExpertDetailPage(expert: const {}),
+        '/expert_earnings': (context) => const ExpertEarningsPage(),
       },
     );
   }

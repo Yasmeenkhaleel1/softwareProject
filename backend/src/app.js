@@ -35,6 +35,7 @@ import publicServicesRoutes from "./routes/public.services.routes.js";
 
 import messageRoutes from "./routes/message.route.js";
 
+import aiRoutes from "./routes/ai.route.js";
 // إعدادات المسار العام
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -118,6 +119,8 @@ app.use("/api/notify", notifyRoutes);
 
 app.use("/api/messages", messageRoutes);
 
+
+app.use("/api/assistant", aiRoutes);
 // 🔹 الإدارة (Admin)
 app.use("/api/admin", adminRoutes);
 

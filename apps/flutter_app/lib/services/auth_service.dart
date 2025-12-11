@@ -1,10 +1,14 @@
-//lib/sevices/auth_service
+// lib/services/auth_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// 👇 مهم: استخدمي ApiConfig بدل localhost الثابت
+import '../config/api_config.dart';
+
 class AuthService {
-  static const String baseUrl = 'http://localhost:5000'; // ← غيّري عند النشر
+  // بدل ثابت "localhost" استخدم getter من ApiConfig
+  static String get _baseUrl => ApiConfig.baseUrl;
 
   // =============================
   // REGISTER
@@ -16,7 +20,7 @@ class AuthService {
     required String gender,
     required String role,
   }) async {
-    final uri = Uri.parse('$baseUrl/auth/register');
+    final uri = Uri.parse('$_baseUrl/auth/register');
 
     try {
       final res = await http.post(
@@ -49,7 +53,7 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final uri = Uri.parse('$baseUrl/auth/login');
+    final uri = Uri.parse('$_baseUrl/auth/login');
 
     try {
       final res = await http.post(
@@ -62,10 +66,14 @@ class AuthService {
         final data = jsonDecode(res.body);
         final prefs = await SharedPreferences.getInstance();
 
-        // ✅ نحفظ فقط ما نحتاجه فعلاً
+        // ✅ نحفظ ما نحتاجه
         await prefs.setString('token', data['token']);
         await prefs.setString('role', data['user']['role']);
         await prefs.setString('email', data['user']['email']);
+        // لو حابة تحفظي الـ userId كمان:
+        if (data['user']['id'] != null) {
+          await prefs.setString('userId', data['user']['id']);
+        }
 
         return {'error': null, 'user': data['user']};
       } else {
@@ -85,6 +93,7 @@ class AuthService {
     await prefs.remove('token');
     await prefs.remove('role');
     await prefs.remove('email');
+    await prefs.remove('userId');
   }
 
   // =============================
@@ -99,7 +108,7 @@ class AuthService {
   // RESEND VERIFICATION EMAIL (OTP)
   // =============================
   Future<String?> resendVerification(String email) async {
-    final uri = Uri.parse('$baseUrl/auth/resend-code');
+    final uri = Uri.parse('$_baseUrl/auth/resend-code');
 
     try {
       final res = await http.post(
@@ -123,7 +132,7 @@ class AuthService {
   // VERIFY EMAIL CODE (OTP)
   // =============================
   Future<String?> verifyCode(String email, String code) async {
-    final uri = Uri.parse('$baseUrl/auth/verify-code');
+    final uri = Uri.parse('$_baseUrl/auth/verify-code');
 
     try {
       final res = await http.post(
@@ -157,7 +166,7 @@ class AuthService {
       return {'message': 'No email found. Please log in again.'};
     }
 
-    final uri = Uri.parse('$baseUrl/auth/change-password');
+    final uri = Uri.parse('$_baseUrl/auth/change-password');
 
     try {
       final res = await http.post(
