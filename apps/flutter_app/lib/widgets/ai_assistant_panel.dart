@@ -3,8 +3,9 @@ import '../../api/api_service.dart';
 
 class AiAssistantPanel extends StatefulWidget {
   final VoidCallback onClose;
- final String userName;
+  final String userName;
   final String userId;
+
   const AiAssistantPanel({
     super.key,
     required this.onClose,
@@ -54,9 +55,10 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
     _scrollToBottom();
 
     try {
-      // ممكن ترسلي context بسيط لاحقًا (آخر حجز، userId، إلخ)
       final answer = await ApiService.askAssistant(
         question: text,
+        // ممكن بعدين تبعتي context: userId, آخر حجز.. الخ
+        // extraContext: {"userId": widget.userId, "name": widget.userName},
       );
 
       setState(() {
@@ -102,221 +104,252 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // عرض البانل (ويب) – ثابت تقريبًا، بس responsive شوي
-    final double panelWidth = 420;
+    final size = MediaQuery.of(context).size;
+    final bool isMobile = size.width < 600;
 
+    // 🔹 ويب / شاشات واسعة → نفس التصميم القديم 100%
+    if (!isMobile) {
+      const double panelWidth = 420;
+
+      return Align(
+        alignment: Alignment.bottomRight,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 24, bottom: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: panelWidth,
+              maxHeight: 560,
+            ),
+            child: _buildPanelLayout(isMobile: false),
+          ),
+        ),
+      );
+    }
+
+    // 🔹 موبايل → بانل شبه فول سكرين، مع SafeArea وحدود خفيفة
     return Align(
-      alignment: Alignment.bottomRight,
+      alignment: Alignment.bottomCenter,
       child: Padding(
-        padding: const EdgeInsets.only(right: 24, bottom: 24),
+        padding: const EdgeInsets.all(12),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: panelWidth,
-            maxHeight: 560,
+            maxWidth: size.width,
+            maxHeight: size.height * 0.9,
           ),
-          child: Material(
-            elevation: 18,
-            borderRadius: BorderRadius.circular(24),
-            clipBehavior: Clip.antiAlias,
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFEBF8FF),
-                    Color(0xFFFDFEFF),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+          child: _buildPanelLayout(isMobile: true),
+        ),
+      ),
+    );
+  }
+
+  /// نفس المحتوى للويب والموبايل، الاختلاف فقط في بعض التفاصيل البسيطة
+  Widget _buildPanelLayout({required bool isMobile}) {
+    return Material(
+      elevation: 18,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFEBF8FF),
+              Color(0xFFFDFEFF),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          top: isMobile, // على الموبايل نحترم الـ notch
+          bottom: true,
+          child: Column(
+            children: [
+              // ===== Header =====
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF62C6D9), Color(0xFF2F8CA5)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                 ),
-              ),
-              child: Column(
-                children: [
-                  // ===== Header =====
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF62C6D9), Color(0xFF2F8CA5)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.smart_toy_outlined,
+                        color: Colors.white,
+                        size: 22,
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Icon(
-                            Icons.smart_toy_outlined,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Smart Assistant",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                "Ask me anything about your bookings & payments",
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: widget.onClose,
-                          icon: const Icon(Icons.close, color: Colors.white),
-                          tooltip: "Close",
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // ===== Suggestions row =====
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    color: Colors.white.withOpacity(0.8),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SuggestionChip(
-                            label: "How to book a session?",
-                            onTap: () {
-                              _controller.text =
-                                  "How can I book a new session with an expert?";
-                              _send();
-                            },
+                          Text(
+                            "Smart Assistant",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          _SuggestionChip(
-                            label: "Payment & refund rules",
-                            onTap: () {
-                              _controller.text =
-                                  "Explain the payment and refund rules for bookings.";
-                              _send();
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          _SuggestionChip(
-                            label: "My upcoming bookings",
-                            onTap: () {
-                              _controller.text =
-                                  "What are my upcoming bookings and their status?";
-                              _send();
-                            },
+                          SizedBox(height: 2),
+                          Text(
+                            "Ask me anything about your bookings & payments",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ),
+                    IconButton(
+                      onPressed: widget.onClose,
+                      icon: Icon(
+                        isMobile ? Icons.keyboard_arrow_down : Icons.close,
+                        color: Colors.white,
+                      ),
+                      tooltip: "Close",
+                    ),
+                  ],
+                ),
+              ),
 
-                  const Divider(height: 1),
-
-                  // ===== Messages list =====
-                  Expanded(
-                    child: Container(
-                      color: _bg,
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          final msg = _messages[index];
-                          return _MessageBubble(message: msg);
+              // ===== Suggestions row =====
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                color: Colors.white.withOpacity(0.8),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _SuggestionChip(
+                        label: "How to book a session?",
+                        onTap: () {
+                          _controller.text =
+                              "How can I book a new session with an expert?";
+                          _send();
                         },
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      _SuggestionChip(
+                        label: "Payment & refund rules",
+                        onTap: () {
+                          _controller.text =
+                              "Explain the payment and refund rules for bookings.";
+                          _send();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _SuggestionChip(
+                        label: "My upcoming bookings",
+                        onTap: () {
+                          _controller.text =
+                              "What are my upcoming bookings and their status?";
+                          _send();
+                        },
+                      ),
+                    ],
                   ),
-
-                  // ===== Input area =====
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
-                          blurRadius: 10,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: TextField(
-                              controller: _controller,
-                              minLines: 1,
-                              maxLines: 4,
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                border: InputBorder.none,
-                                hintText: "Ask me anything...",
-                              ),
-                              onSubmitted: (_) => _send(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          height: 40,
-                          width: 40,
-                          child: FloatingActionButton(
-                            heroTag: "assistantSend",
-                            backgroundColor: _sending
-                                ? Colors.grey.shade400
-                                : _brandDark,
-                            onPressed: _sending ? null : _send,
-                            child: _sending
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor:
-                                          AlwaysStoppedAnimation(Colors.white),
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.send_rounded,
-                                    size: 18,
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+
+              const Divider(height: 1),
+
+              // ===== Messages list =====
+              Expanded(
+                child: Container(
+                  color: _bg,
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = _messages[index];
+                      return _MessageBubble(message: msg);
+                    },
+                  ),
+                ),
+              ),
+
+              // ===== Input area =====
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: TextField(
+                          controller: _controller,
+                          minLines: 1,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: "Ask me anything...",
+                          ),
+                          onSubmitted: (_) => _send(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 40,
+                      width: 40,
+                      child: FloatingActionButton(
+                        heroTag: "assistantSend",
+                        backgroundColor:
+                            _sending ? Colors.grey.shade400 : _brandDark,
+                        onPressed: _sending ? null : _send,
+                        child: _sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation(Colors.white),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
+                                size: 18,
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -348,8 +381,7 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isBot = message.fromBot;
-    final alignment =
-        isBot ? Alignment.centerLeft : Alignment.centerRight;
+    final alignment = isBot ? Alignment.centerLeft : Alignment.centerRight;
     final bg = isBot ? Colors.white : const Color(0xFF62C6D9);
     final textColor = isBot ? const Color(0xFF0F172A) : Colors.white;
 

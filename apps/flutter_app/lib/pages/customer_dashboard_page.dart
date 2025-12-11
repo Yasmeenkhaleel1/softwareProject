@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'customer_profile_page.dart';
 import 'ExpertDetailPage.dart';
@@ -13,6 +14,7 @@ import 'customer_calendar_page.dart';
 import 'chat/conversations_page.dart'; // ✅ صفحة المسجات الجديدة
 import 'customer_experts_page.dart'; // 👈 صفحة My Experts اللي عملناها
 import 'package:flutter_app/widgets/ai_assistant_panel.dart';
+import '../config/api_config.dart'; 
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -25,13 +27,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     with SingleTickerProviderStateMixin {
   Map<String, dynamic>? user;
   bool loading = true;
-  //////
-late PageController _expertsPageController;
-double _expertsPage = 0.0;
-///////
+
+  late PageController _expertsPageController;
+  double _expertsPage = 0.0;
+
   static const Color primaryColor = Color(0xFF62C6D9);
   static const Color accentColor = Color(0xFF285E6E);
-  static const baseUrl = "http://localhost:5000";
+  static String get baseUrl => ApiConfig.baseUrl;
+
 
   late AnimationController _hoverController;
 
@@ -46,7 +49,7 @@ double _expertsPage = 0.0;
   bool _hasSearched = false;
   List<Map<String, dynamic>> _searchResults = [];
 
- bool _showAiAssistant = false; 
+  bool _showAiAssistant = false;
 
   final List<String> _categories = const [
     "Design",
@@ -65,27 +68,24 @@ double _expertsPage = 0.0;
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
-    ///////
-    _expertsPageController = PageController(viewportFraction: 0.78);
 
-_expertsPageController.addListener(() {
-  setState(() {
-    _expertsPage = _expertsPageController.page ?? 0.0;
-  });
-});
-/////////
-    
+    _expertsPageController = PageController(viewportFraction: 0.78);
+    _expertsPageController.addListener(() {
+      setState(() {
+        _expertsPage = _expertsPageController.page ?? 0.0;
+      });
+    });
+
     fetchUser();
     fetchExperts();
   }
 
- @override
-void dispose() {
-  _hoverController.dispose();
-  _expertsPageController.dispose();
-  super.dispose();
-}
-
+  @override
+  void dispose() {
+    _hoverController.dispose();
+    _expertsPageController.dispose();
+    super.dispose();
+  }
 
   Future<void> fetchUser() async {
     final prefs = await SharedPreferences.getInstance();
@@ -201,137 +201,272 @@ void dispose() {
     }
   }
 
-@override
-Widget build(BuildContext context) {
-  final String userName =
-      user?['name'] ?? user?['email']?.split('@')[0] ?? 'User';
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final bool isMobile = size.width < 700;
 
-  // 👇 نفس الـ body اللي كان عندك، بس حطيناه في متغيّر عشان ندخله جوّا Stack
-  final Widget mainBody = loading
-      ? const Center(child: CircularProgressIndicator())
-      : RefreshIndicator(
-          onRefresh: () async {
-            await fetchUser();
-            await fetchExperts();
-            if (_hasSearched) await _searchServices();
-          },
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1100),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 24,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 1) Hero
-                    ScrollReveal(
-                      delay: const Duration(milliseconds: 0),
-                      child: _buildWelcomeBanner(),
-                    ),
-                    const SizedBox(height: 24),
+    final String userName =
+        user?['name'] ?? user?['email']?.split('@')[0] ?? 'User';
 
-                    // 2) Search
-                    ScrollReveal(
-                      delay: const Duration(milliseconds: 120),
-                      child: _buildSearchAndFilters(),
-                    ),
-                    const SizedBox(height: 24),
+    // 👇 نفس الـ body السابق لكن مع padding مناسب للموبايل
+    final Widget mainBody = loading
+        ? const Center(child: CircularProgressIndicator())
+        : RefreshIndicator(
+            onRefresh: () async {
+              await fetchUser();
+              await fetchExperts();
+              if (_hasSearched) await _searchServices();
+            },
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 16 : 24,
+                    vertical: isMobile ? 16 : 24,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1) Hero
+                      ScrollReveal(
+                        delay: const Duration(milliseconds: 0),
+                        child: _buildWelcomeBanner(),
+                      ),
+                      const SizedBox(height: 24),
 
-                    // 3) Results
-                    ScrollReveal(
-                      delay: const Duration(milliseconds: 220),
-                      child: _buildSearchResultsSection(),
-                    ),
-                    const SizedBox(height: 32),
+                      // 2) Search
+                      ScrollReveal(
+                        delay: const Duration(milliseconds: 120),
+                        child: _buildSearchAndFilters(),
+                      ),
+                      const SizedBox(height: 24),
 
-                    // 4) Recommended experts
-                    ScrollReveal(
-                      delay: const Duration(milliseconds: 320),
-                      child: _buildRecommendedSectionCard(),
-                    ),
-                    const SizedBox(height: 24),
+                      // 3) Results
+                      ScrollReveal(
+                        delay: const Duration(milliseconds: 220),
+                        child: _buildSearchResultsSection(),
+                      ),
+                      const SizedBox(height: 32),
 
-                    // 5) Experts Carousel
-                    ScrollReveal(
-                      delay: const Duration(milliseconds: 420),
-                      child: _buildExpertsSectionCard(),
-                    ),
-                    const SizedBox(height: 24),
+                      // 4) Recommended experts
+                      ScrollReveal(
+                        delay: const Duration(milliseconds: 320),
+                        child: _buildRecommendedSectionCard(),
+                      ),
+                      const SizedBox(height: 24),
 
-                    // 6) Categories
-                    ScrollReveal(
-                      delay: const Duration(milliseconds: 520),
-                      child: _buildCategoriesSectionCard(),
-                    ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
+                      // 5) Experts Carousel
+                      ScrollReveal(
+                        delay: const Duration(milliseconds: 420),
+                        child: _buildExpertsSectionCard(),
+                      ),
+                      const SizedBox(height: 24),
 
-  return Scaffold(
-    backgroundColor: const Color(0xFFF3F7FA),
-    appBar: PreferredSize(
-      preferredSize: const Size.fromHeight(70),
-      child: _buildTopBar(userName),
-    ),
-
-    // 🟢 زر الشات بوت – يفتح/يغلق الـ Panel بدل SnackBar
-    floatingActionButton: FloatingActionButton.extended(
-      backgroundColor: accentColor,
-      icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-      label: const Text("Chatbot", style: TextStyle(color: Colors.white)),
-      onPressed: () {
-        setState(() {
-          _showAiAssistant = !_showAiAssistant;
-        });
-      },
-    ),
-
-    // 🟢 Stack: الداشبورد + الشات بوت فوقه في نفس الشاشة
-    body: Stack(
-      children: [
-        mainBody,
-
-        if (_showAiAssistant)
-          Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.only(
-                right: 24,
-                bottom: 90, // عشان ما يغطيه الـ FAB
-              ),
-              child: SizedBox(
-                width: 420,
-                height: 520,
-                child: AiAssistantPanel( // 👈 الودجت اللي عملناه للشات بوت
-                  userName: userName,
-                  userId: user?['_id']?.toString() ?? '',
-                  onClose: () {
-                    setState(() {
-                      _showAiAssistant = false;
-                    });
-                  },
+                      // 6) Categories
+                      ScrollReveal(
+                        delay: const Duration(milliseconds: 520),
+                        child: _buildCategoriesSectionCard(),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
-    ),
-  );
-}
+          );
 
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F7FA),
 
+      // ✅ AppBar مختلف للموبايل و للديسكتوب بدون ما نخرب تصميم الويب
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(isMobile ? 60 : 70),
+        child: _buildTopBar(userName, isMobile),
+      ),
+
+      // 🟢 زر الشات بوت – يفتح/يغلق الـ Panel
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: accentColor,
+        icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+        label: const Text("Chatbot", style: TextStyle(color: Colors.white)),
+        onPressed: () {
+          setState(() {
+            _showAiAssistant = !_showAiAssistant;
+          });
+        },
+      ),
+
+      // 🟢 Stack: الداشبورد + الشات بوت فوقه في نفس الشاشة
+      body: Stack(
+        children: [
+          mainBody,
+
+          if (_showAiAssistant)
+            Align(
+              alignment:
+                  isMobile ? Alignment.bottomCenter : Alignment.bottomRight,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: isMobile ? 12 : 24,
+                  left: isMobile ? 12 : 0,
+                  bottom: isMobile ? 80 : 90, // عشان ما يغطيه الـ FAB
+                ),
+                child: SizedBox(
+                  width: isMobile ? size.width * 0.95 : 420,
+                  height: isMobile ? size.height * 0.65 : 520,
+                  child: AiAssistantPanel(
+                    userName: userName,
+                    userId: user?['_id']?.toString() ?? '',
+                    onClose: () {
+                      setState(() {
+                        _showAiAssistant = false;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   // ========================= TOP BAR =========================
 
-  PreferredSizeWidget _buildTopBar(String userName) {
+  PreferredSizeWidget _buildTopBar(String userName, bool isMobile) {
+    return isMobile
+        ? _buildMobileTopBar(userName)
+        : _buildDesktopTopBar(userName);
+  }
+
+  AppBar _buildMobileTopBar(String userName) {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      centerTitle: true,
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: const LinearGradient(
+                colors: [primaryColor, accentColor],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Center(
+              child: Image.asset(
+                'assets/images/treasure_icon.png',
+                height: 20,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            "Lost Treasures",
+            style: TextStyle(
+              color: accentColor,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+        ],
+      ),
+      leading: IconButton(
+        icon: const Icon(Icons.person_outline, color: accentColor),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CustomerProfilePage(),
+            ),
+          );
+        },
+      ),
+      actions: [
+        IconButton(
+          tooltip: "Notifications",
+          icon: const Icon(Icons.notifications_none, color: accentColor),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CustomerNotificationsPage(),
+              ),
+            );
+          },
+        ),
+        IconButton(
+          tooltip: "Calendar",
+          icon: const Icon(Icons.calendar_month_outlined, color: accentColor),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CustomerCalendarPage(),
+              ),
+            );
+          },
+        ),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: accentColor),
+          onSelected: (value) {
+            switch (value) {
+              case 'messages':
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ConversationsPage(),
+                  ),
+                );
+                break;
+              case 'experts':
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerExpertsPage(),
+                  ),
+                );
+                break;
+              case 'help':
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerHelpPage(),
+                  ),
+                );
+                break;
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: 'messages',
+              child: Text("Messages"),
+            ),
+            PopupMenuItem(
+              value: 'experts',
+              child: Text("My Experts"),
+            ),
+            PopupMenuItem(
+              value: 'help',
+              child: Text("Help & Support"),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  AppBar _buildDesktopTopBar(String userName) {
     return AppBar(
       elevation: 0,
       backgroundColor: Colors.white.withOpacity(0.96),
@@ -399,247 +534,268 @@ Widget build(BuildContext context) {
           ),
         ],
       ),
-     actions: [
-  Row(
-    children: [
-      Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          const Text(
-            "Welcome back,",
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey,
+      actions: [
+        Row(
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text(
+                  "Welcome back,",
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey,
+                  ),
+                ),
+                Text(
+                  userName,
+                  style: const TextStyle(
+                    color: accentColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
-          ),
-          Text(
-            userName,
-            style: const TextStyle(
-              color: accentColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+            const SizedBox(width: 10),
+            const CircleAvatar(
+              radius: 18,
+              backgroundColor: Color(0xFFE3F6FA),
+              child: Icon(Icons.person, color: accentColor, size: 20),
             ),
-          ),
-        ],
-      ),
-      const SizedBox(width: 10),
-      const CircleAvatar(
-        radius: 18,
-        backgroundColor: Color(0xFFE3F6FA),
-        child: Icon(Icons.person, color: accentColor, size: 20),
-      ),
-      const SizedBox(width: 8),
+            const SizedBox(width: 8),
 
-      // 🔔 Notifications
-      IconButton(
-        tooltip: "Notifications",
-        icon: const Icon(Icons.notifications_none, color: accentColor),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const CustomerNotificationsPage(),
+            // 🔔 Notifications
+            IconButton(
+              tooltip: "Notifications",
+              icon: const Icon(Icons.notifications_none, color: accentColor),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerNotificationsPage(),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
 
-      // 💬 Messages (قائمة المحادثات)
-      IconButton(
-        tooltip: "Messages",
-        icon: const Icon(Icons.message_outlined, color: accentColor),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const ConversationsPage(),
+            // 💬 Messages
+            IconButton(
+              tooltip: "Messages",
+              icon: const Icon(Icons.message_outlined, color: accentColor),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ConversationsPage(),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
 
-      // ❓ Help & Support
-      IconButton(
-        tooltip: "Help & Support",
-        icon: const Icon(Icons.help_outline, color: accentColor),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const CustomerHelpPage(),
+            // ❓ Help & Support
+            IconButton(
+              tooltip: "Help & Support",
+              icon: const Icon(Icons.help_outline, color: accentColor),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerHelpPage(),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
 
-      const SizedBox(width: 4),
+            const SizedBox(width: 4),
 
-      // 👥 My Experts
-      TextButton.icon(
-        style: TextButton.styleFrom(
-          foregroundColor: accentColor,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
-          ),
+            // 👥 My Experts
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: accentColor,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerExpertsPage(),
+                  ),
+                );
+              },
+              icon: const Icon(
+                Icons.people_alt_outlined,
+                size: 18,
+              ),
+              label: const Text(
+                "My Experts",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 4),
+
+            // 📅 My Calendar
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: accentColor,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerCalendarPage(),
+                  ),
+                );
+              },
+              child: const Text(
+                "My Calendar",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // 👤 My Profile
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: accentColor,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerProfilePage(),
+                  ),
+                );
+              },
+              child: const Text(
+                "My Profile",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 18),
+          ],
         ),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const CustomerExpertsPage(),
-            ),
-          );
-        },
-        icon: const Icon(
-          Icons.people_alt_outlined,
-          size: 18,
-        ),
-        label: const Text(
-          "My Experts",
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-
-      const SizedBox(width: 4),
-
-      // 📅 My Calendar
-      TextButton(
-        style: TextButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: accentColor,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
-          ),
-        ),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const CustomerCalendarPage(),
-            ),
-          );
-        },
-        child: const Text(
-          "My Calendar",
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-
-      const SizedBox(width: 8),
-
-      // 👤 My Profile
-      TextButton(
-        style: TextButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: accentColor,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
-          ),
-        ),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const CustomerProfilePage(),
-            ),
-          );
-        },
-        child: const Text(
-          "My Profile",
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-
-      const SizedBox(width: 18),
-    ],
-  ),
-],
-       
+      ],
     );
   }
 
   // ========================= UI SECTIONS =========================
 
- Widget _buildWelcomeBanner() {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(24),
-      gradient: const LinearGradient(
-        colors: [
-          Color(0xFF62C6D9),
-          Color(0xFF3BA8B7),
-          Color(0xFF287E8D),
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      boxShadow: const [
-        BoxShadow(
-          color: Colors.black12,
-          blurRadius: 18,
-          offset: Offset(0, 9),
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                "Find the right mentor.\nBuild your future with confidence.",
-                style: TextStyle(
-                  fontSize: 26,
-                  height: 1.3,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-              SizedBox(height: 10),
-              Text(
-                "Book 1:1 sessions with verified experts in tech, design, business and more.",
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.white70,
-                  height: 1.6,
-                ),
-              ),
-              SizedBox(height: 14),
-            ],
-          ),
-        ),
-        const SizedBox(width: 18),
-        SizedBox(
-          width: 180,
-          height: 180,
-          child: Image.asset(
-            "assets/images/mentors_hero.png", // ✅ حضّري هذه الصورة في assets
-            fit: BoxFit.contain,
-          ),
-        ),
-      ],
-    ),
-  );
-}
+  Widget _buildWelcomeBanner() {
+    final width = MediaQuery.of(context).size.width;
+    final bool isMobile = width < 700;
 
+    final textColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: const [
+        Text(
+          "Find the right mentor.\nBuild your future with confidence.",
+          style: TextStyle(
+            fontSize: 26,
+            height: 1.3,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+          ),
+        ),
+        SizedBox(height: 10),
+        Text(
+          "Book 1:1 sessions with verified experts in tech, design, business and more.",
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.white70,
+            height: 1.6,
+          ),
+        ),
+        SizedBox(height: 14),
+      ],
+    );
+
+    final imageWidget = SizedBox(
+      width: isMobile ? 160 : 180,
+      height: isMobile ? 160 : 180,
+      child: Image.asset(
+        "assets/images/mentors_hero.png",
+        fit: BoxFit.contain,
+      ),
+    );
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 18 : 28,
+        vertical: isMobile ? 20 : 24,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF62C6D9),
+            Color(0xFF3BA8B7),
+            Color(0xFF287E8D),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 18,
+            offset: Offset(0, 9),
+          ),
+        ],
+      ),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                textColumn,
+                const SizedBox(height: 16),
+                Center(child: imageWidget),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: textColumn),
+                const SizedBox(width: 18),
+                imageWidget,
+              ],
+            ),
+    );
+  }
 
   /// 🔎 Search + Category + Sort
   Widget _buildSearchAndFilters() {
+    final width = MediaQuery.of(context).size.width;
+    final bool isMobile = width < 700;
+
     return Card(
       elevation: 4,
       shadowColor: Colors.black12,
@@ -666,11 +822,12 @@ Widget build(BuildContext context) {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: TextField(
+
+            // 🔍 حقل البحث + زر Search (مختلف على الموبايل)
+            if (isMobile)
+              Column(
+                children: [
+                  TextField(
                     onChanged: (v) => _searchQuery = v,
                     onSubmitted: (_) => _searchServices(),
                     decoration: InputDecoration(
@@ -688,35 +845,85 @@ Widget build(BuildContext context) {
                           vertical: 13, horizontal: 14),
                     ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 13),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentColor,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: _searchServices,
+                      child: const Text(
+                        "Search",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
-                  onPressed: _searchServices,
-                  child: const Text(
-                    "Search",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: Colors.white,
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      onChanged: (v) => _searchQuery = v,
+                      onSubmitted: (_) => _searchServices(),
+                      decoration: InputDecoration(
+                        hintText:
+                            "e.g. UI design review, Node.js help, marketing strategy...",
+                        prefixIcon: const Icon(Icons.search,
+                            color: primaryColor, size: 22),
+                        filled: true,
+                        fillColor: const Color(0xFFF7FBFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 13, horizontal: 14),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 14),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: _searchServices,
+                    child: const Text(
+                      "Search",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
             const SizedBox(height: 16),
-            Row(
-              children: [
-                // Category
-                Expanded(
-                  child: DropdownButtonFormField<String>(
+
+            // فلاتر الكاتيجوري و الترتيب (تحت بعض على الموبايل)
+            if (isMobile)
+              Column(
+                children: [
+                  DropdownButtonFormField<String>(
                     value: _selectedCategory,
                     decoration: InputDecoration(
                       labelText: "Category",
@@ -746,11 +953,8 @@ Widget build(BuildContext context) {
                       if (_hasSearched) _searchServices();
                     },
                   ),
-                ),
-                const SizedBox(width: 14),
-                // Sort
-                Expanded(
-                  child: DropdownButtonFormField<String>(
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
                     value: _sortBy,
                     decoration: InputDecoration(
                       labelText: "Sort by",
@@ -782,9 +986,82 @@ Widget build(BuildContext context) {
                       if (_hasSearched) _searchServices();
                     },
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  // Category
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedCategory,
+                      decoration: InputDecoration(
+                        labelText: "Category",
+                        filled: true,
+                        fillColor: const Color(0xFFF7FBFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 12),
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text("All categories"),
+                        ),
+                        ..._categories.map(
+                          (c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(c),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _selectedCategory = v);
+                        if (_hasSearched) _searchServices();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Sort
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _sortBy,
+                      decoration: InputDecoration(
+                        labelText: "Sort by",
+                        filled: true,
+                        fillColor: const Color(0xFFF7FBFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 12),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'RATING_DESC',
+                          child: Text("Top rated"),
+                        ),
+                        DropdownMenuItem(
+                          value: 'PRICE_ASC',
+                          child: Text("Price: low to high"),
+                        ),
+                        DropdownMenuItem(
+                          value: 'PRICE_DESC',
+                          child: Text("Price: high to low"),
+                        ),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _sortBy = v ?? 'RATING_DESC');
+                        if (_hasSearched) _searchServices();
+                      },
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -832,21 +1109,20 @@ Widget build(BuildContext context) {
           ),
         ),
         const SizedBox(height: 10),
-       SizedBox(
-  height: 170,
-  child: ListView.separated(
-    scrollDirection: Axis.horizontal,
-    itemCount: _searchResults.length,
-    separatorBuilder: (_, __) => SizedBox(width: 16),
-    itemBuilder: (context, index) {
-      return SizedBox(
-        width: 320,
-        child: _buildServiceSearchCard(_searchResults[index]),
-      );
-    },
-  ),
-)
-
+        SizedBox(
+          height: 170,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _searchResults.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              return SizedBox(
+                width: 320,
+                child: _buildServiceSearchCard(_searchResults[index]),
+              );
+            },
+          ),
+        )
       ],
     );
   }
@@ -1029,7 +1305,7 @@ Widget build(BuildContext context) {
     );
   }
 
-  // ========================= EXISTING SECTIONS (مع تحسين بسيط) =========================
+  // ========================= EXISTING SECTIONS =========================
 
   Widget _buildRecommendedSection() {
     return Column(
@@ -1057,350 +1333,330 @@ Widget build(BuildContext context) {
     );
   }
 
-Widget _buildShowExpertsSection() {
-  if (loadingExperts) {
-    return const Center(child: CircularProgressIndicator());
-  }
-  if (experts.isEmpty) {
-    return const Text(
-      "No experts found right now.",
-      style: TextStyle(color: Colors.grey),
+  Widget _buildShowExpertsSection() {
+    if (loadingExperts) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (experts.isEmpty) {
+      return const Text(
+        "No experts found right now.",
+        style: TextStyle(color: Colors.grey),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "👨‍🏫 Meet Our Experts",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: accentColor,
+          ),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 190,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemBuilder: (context, index) {
+              final expert = experts[index] as Map<String, dynamic>;
+              return _buildExpertCard(expert);
+            },
+            separatorBuilder: (_, __) => const SizedBox(width: 16),
+            itemCount: experts.length,
+          ),
+        )
+      ],
     );
   }
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        "👨‍🏫 Meet Our Experts",
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: accentColor,
-        ),
-      ),
-      const SizedBox(height: 14),
+  Widget _buildExpertCard(Map<String, dynamic> expert) {
+    final name = (expert["name"] ?? "Unknown").toString();
+    final specialty =
+        (expert["specialization"] ?? expert["specialty"] ?? "N/A").toString();
+    final ratingVal =
+        (expert["ratingAvg"] ?? expert["rating"] ?? 0).toString();
+    final profileImageUrl = (expert["profileImageUrl"] ?? "").toString();
 
-      SizedBox(
-  height: 190,
-  child: ListView.separated(
-    scrollDirection: Axis.horizontal,
-    itemBuilder: (context, index) {
-      final expert = experts[index] as Map<String, dynamic>;
-      return _buildExpertCard(expert);
-    },
-    separatorBuilder: (_, __) => SizedBox(width: 16),
-    itemCount: experts.length,
-  ),
-)
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(right: 16),
+        width: 130,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
 
-
-    ],
-  );
-}
-
-
-Widget _buildExpertCard(Map<String, dynamic> expert) {
-  final name = (expert["name"] ?? "Unknown").toString();
-  final specialty =
-      (expert["specialization"] ?? expert["specialty"] ?? "N/A").toString();
-  final ratingVal =
-      (expert["ratingAvg"] ?? expert["rating"] ?? 0).toString();
-  final profileImageUrl = (expert["profileImageUrl"] ?? "").toString();
-
-  return MouseRegion(
-    cursor: SystemMouseCursors.click,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.only(right: 16),
-      width: 130,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-
-        // 🔥 ظل تركوازي مشع + 3D
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF62C6D9).withOpacity(0.25),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
-        border: Border.all(
-          color: const Color(0xFFE9F5F7),
-          width: 1,
-        ),
-      ),
-
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            // ===== صورة الخبير =====
-            Container(
-              height: 44,
-              width: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF62C6D9),
-                    Color(0xFF3BA8B7),
-                  ],
-                ),
-              ),
-              child: CircleAvatar(
-                radius: 26,
-                backgroundColor: Colors.white,
-                backgroundImage: profileImageUrl.isNotEmpty
-                    ? NetworkImage(profileImageUrl)
-                    : null,
-                child: profileImageUrl.isEmpty
-                    ? const Icon(Icons.person,
-                        size: 28, color: Color(0xFF62C6D9))
-                    : null,
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            // ===== الاسم =====
-            Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-                color: Color(0xFF285E6E),
-              ),
-            ),
-
-            // ===== التخصص =====
-            Text(
-              specialty,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-
-            const Spacer(),
-
-            // ===== التقييم + View =====
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.star,
-                        size: 15, color: Colors.amber),
-                    const SizedBox(width: 3),
-                    Text(
-                      ratingVal,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-
-                // ===== زر View =====
-                Container(
-                  height: 28,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF62C6D9),
-                        Color(0xFF3BA8B7),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(55, 28),
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ExpertDetailPage(expert: expert),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      "View",
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          // 🔥 ظل تركوازي
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF62C6D9).withOpacity(0.25),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
             ),
           ],
+          border: Border.all(
+            color: const Color(0xFFE9F5F7),
+            width: 1,
+          ),
         ),
-      ),
-    ),
-  );
-}
 
-
-Widget _buildCategorySection() {
-  final categories = [
-    //{"title": "Technology", "icon": Icons.code},
-    {"title": "Design", "icon": Icons.palette},
-   // {"title": "Business", "icon": Icons.business_center},
-    {"title": "Education", "icon": Icons.school},
-    {"title": "Marketing", "icon": Icons.campaign},
-    {"title": "Consulting", "icon": Icons.support_agent},
-    {"title": "Translation", "icon": Icons.language},
-    {"title": "Other", "icon": Icons.apps},
-  ];
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        "Browse Specialties",
-        style: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
-          color: Color(0xFF285E6E),
-        ),
-      ),
-      const SizedBox(height: 20),
-
-      GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 16,
-          crossAxisSpacing: 16,
-          childAspectRatio: 3.8, // 🔥 أصغر وأرتب
-        ),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final cat = categories[index];
-
-          return MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-
-              // ===== UI BOX =====
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                color: Colors.white,
-                boxShadow: [
-                  // 🔥 Turquoise glow shadow
-                  BoxShadow(
-                    color: const Color(0xFF62C6D9).withOpacity(0.30),
-                    blurRadius: 28,
-                    spreadRadius: -2,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-                border: Border.all(
-                  color: const Color(0xFFE8F5F8),
-                  width: 1,
-                ),
-              ),
-
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () {
-                  setState(() {
-                    _selectedCategory = cat["title"] as String;
-                    _hasSearched = true;
-                  });
-                  _searchServices();
-                },
-
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-
-                  child: Row(
-                    children: [
-                      // ===== ICON BUBBLE =====
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFF62C6D9),
-                              Color(0xFF3BA8B7),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                        child: Icon(
-                          cat["icon"] as IconData,
-                          size: 18,
-                          color: Colors.white,
-                        ),
-                      ),
-
-                      const SizedBox(width: 14),
-
-                      // ===== Text label =====
-                      Expanded(
-                        child: Text(
-                          cat["title"] as String,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF285E6E),
-                          ),
-                        ),
-                      ),
-
-                      // ===== Arrow right =====
-                      const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 14,
-                        color: Colors.grey,
-                      )
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              // صورة الخبير
+              Container(
+                height: 44,
+                width: 44,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF62C6D9),
+                      Color(0xFF3BA8B7),
                     ],
                   ),
                 ),
+                child: CircleAvatar(
+                  radius: 26,
+                  backgroundColor: Colors.white,
+                  backgroundImage: profileImageUrl.isNotEmpty
+                      ? NetworkImage(profileImageUrl)
+                      : null,
+                  child: profileImageUrl.isEmpty
+                      ? const Icon(Icons.person,
+                          size: 28, color: Color(0xFF62C6D9))
+                      : null,
+                ),
               ),
-            ),
-          );
-        },
+
+              const SizedBox(height: 10),
+
+              // الاسم
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  color: Color(0xFF285E6E),
+                ),
+              ),
+
+              // التخصص
+              Text(
+                specialty,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              const Spacer(),
+
+              // التقييم + View
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.star,
+                          size: 15, color: Colors.amber),
+                      const SizedBox(width: 3),
+                      Text(
+                        ratingVal,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    height: 28,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Color(0xFF62C6D9),
+                          Color(0xFF3BA8B7),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(55, 28),
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ExpertDetailPage(expert: expert),
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        "View",
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
-    ],
-  );
+    );
+  }
+
+  Widget _buildCategorySection() {
+    final categories = [
+      {"title": "Design", "icon": Icons.palette},
+      {"title": "Education", "icon": Icons.school},
+      {"title": "Marketing", "icon": Icons.campaign},
+      {"title": "Consulting", "icon": Icons.support_agent},
+      {"title": "Translation", "icon": Icons.language},
+      {"title": "Other", "icon": Icons.apps},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Browse Specialties",
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF285E6E),
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 3.8,
+          ),
+          itemCount: categories.length,
+          itemBuilder: (context, index) {
+            final cat = categories[index];
+
+            return MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF62C6D9).withOpacity(0.30),
+                      blurRadius: 28,
+                      spreadRadius: -2,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: const Color(0xFFE8F5F8),
+                    width: 1,
+                  ),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () {
+                    setState(() {
+                      _selectedCategory = cat["title"] as String;
+                      _hasSearched = true;
+                    });
+                    _searchServices();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xFF62C6D9),
+                                Color(0xFF3BA8B7),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: Icon(
+                            cat["icon"] as IconData,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            cat["title"] as String,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF285E6E),
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 14,
+                          color: Colors.grey,
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
 }
 
+// ========================= ScrollReveal =========================
 
-    }
-  class ScrollReveal extends StatefulWidget {
+class ScrollReveal extends StatefulWidget {
   final Widget child;
   final Duration delay;
 
@@ -1413,7 +1669,7 @@ Widget _buildCategorySection() {
   @override
   State<ScrollReveal> createState() => _ScrollRevealState();
 }
-    
+
 class _ScrollRevealState extends State<ScrollReveal>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
@@ -1445,7 +1701,6 @@ class _ScrollRevealState extends State<ScrollReveal>
       ),
     );
 
-    // يبدأ الأنيميشن بعد التأخير المحدد
     Future.delayed(widget.delay, () {
       if (mounted) _controller.forward();
     });
@@ -1468,7 +1723,3 @@ class _ScrollRevealState extends State<ScrollReveal>
     );
   }
 }
-
-
-
-
