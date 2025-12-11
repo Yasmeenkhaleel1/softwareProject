@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart'; 
+import '../config/api_config.dart';
+
 class ApiService {
   // 🔥 لأن المشروع يعمل فقط على الويب → نستخدم localhost دائماً
-  static const String baseUrl = "http://localhost:5000/api";
+  static String get baseUrl => "${ApiConfig.baseUrl}/api";
+
 
   // 🔹 Get stored token
   static Future<String?> getToken() async {

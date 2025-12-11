@@ -1,10 +1,15 @@
-//login_page
+// lib/pages/login_page.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../config/api_config.dart';
 import '../services/auth_service.dart';
 import '../services/push_notification_service.dart';
+
 // ✅ استيراد الصفحات
 import 'landing_page.dart';
 import 'expert_profile_page.dart';
@@ -26,6 +31,28 @@ class _LoginPageState extends State<LoginPage> {
   String password = "";
   bool isLoading = false;
 
+  late final String _baseUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _baseUrl = _resolveBaseUrl();
+  }
+
+  // 🔗 نفس فكرة ApiConfig في باقي الصفحات (يدعم Web + Android Emulator)
+  String _resolveBaseUrl() {
+    String raw = ApiConfig.baseUrl; // مثال: http://localhost:5000
+    if (raw.contains('localhost')) {
+      if (kIsWeb) {
+        return raw.replaceAll('localhost', '127.0.0.1');
+      }
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        return raw.replaceAll('localhost', '10.0.2.2');
+      }
+    }
+    return raw;
+  }
+
   Future<void> loginUser() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -33,25 +60,24 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/auth/login'),
+        Uri.parse('$_baseUrl/auth/login'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({"email": email, "password": password}),
+        body: jsonEncode({"email": email.trim(), "password": password}),
       );
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['token'] != null) {
-
-        
-
         final prefs = await SharedPreferences.getInstance();
 
-        // ✅ نحفظ المعلومات الضرورية
+        // ✅ حفظ المعلومات
         await prefs.setString('token', data['token']);
         await prefs.setString('role', data['user']['role']);
         await prefs.setString('email', data['user']['email']);
-        await prefs.setString('userId', data['user']['id']); 
-        await PushNotificationService.initFCM(); // 🔥 يسجل التوكن ويرسله للسيرفر
+        await prefs.setString('userId', data['user']['id']);
+
+        // 🔔 تسجيل FCM token
+        await PushNotificationService.initFCM();
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("✅ Login successful!")),
@@ -62,27 +88,21 @@ class _LoginPageState extends State<LoginPage> {
         final String role = data['user']['role'].toUpperCase();
         Widget nextPage;
 
-        // 🟩 هنا منطق التنقل الصحيح
         if (role == 'ADMIN') {
-          // ✅ الأدمن يدخل إلى صفحة اللاندنغ أولاً
           nextPage = LandingPage(
             isLoggedIn: true,
             onLogout: () async => await AuthService().logout(),
             userRole: role,
           );
-
         } else if (role == 'CUSTOMER') {
-          // 👤 المستخدم العادي
           nextPage = LandingPage(
             isLoggedIn: true,
             onLogout: () async => await AuthService().logout(),
             userRole: role,
           );
-
         } else if (role == 'EXPERT') {
-          // 🧠 الخبير (تحقق من حالته)
           final res = await http.get(
-            Uri.parse('http://localhost:5000/api/me'),
+            Uri.parse('$_baseUrl/api/me'),
             headers: {'Authorization': 'Bearer ${data['token']}'},
           );
 
@@ -105,9 +125,7 @@ class _LoginPageState extends State<LoginPage> {
           } else {
             nextPage = const WaitingApprovalPage();
           }
-
         } else {
-          // أي دور آخر (احتياط)
           nextPage = LandingPage(
             isLoggedIn: true,
             onLogout: () async => await AuthService().logout(),
@@ -119,13 +137,11 @@ class _LoginPageState extends State<LoginPage> {
           context,
           MaterialPageRoute(builder: (_) => nextPage),
         );
-
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? "❌ Login failed")),
         );
       }
-
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("⚠️ Error: $e")),
@@ -153,8 +169,10 @@ class _LoginPageState extends State<LoginPage> {
           labelText: label,
           filled: true,
           fillColor: Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         onChanged: onChanged,
@@ -184,90 +202,143 @@ class _LoginPageState extends State<LoginPage> {
             );
           },
         ),
+        title: const Text(
+          "Login",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 50),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.lock_outline,
-                  size: 80, color: Color(0xFF62C6D9)),
-              const SizedBox(height: 20),
-              const Text(
-                "Welcome Back!",
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF007AFF),
-                ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                // ✅ الويب يكون كارد عريض، الموبايل بعرض أصغر
+                maxWidth: kIsWeb ? 480 : 380,
               ),
-              const SizedBox(height: 30),
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    _buildTextField(
-                      icon: Icons.email_outlined,
-                      label: "Email",
-                      keyboardType: TextInputType.emailAddress,
-                      onChanged: (v) => email = v,
-                      validator: (v) =>
-                          v!.isEmpty ? "Please enter your email" : null,
-                    ),
-                    _buildTextField(
-                      icon: Icons.lock_outline,
-                      label: "Password",
-                      obscure: true,
-                      onChanged: (v) => password = v,
-                      validator: (v) =>
-                          v!.isEmpty ? "Please enter your password" : null,
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF62C6D9),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Header icon + title
+                  Container(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Column(
+                      children: const [
+                        CircleAvatar(
+                          radius: 36,
+                          backgroundColor: Color(0xFF62C6D9),
+                          child: Icon(Icons.lock_outline,
+                              size: 40, color: Colors.white),
                         ),
-                        onPressed: isLoading ? null : loginUser,
-                        child: isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                "Login",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                        SizedBox(height: 16),
+                        Text(
+                          "Welcome Back!",
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF007AFF),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Card form
+                  Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 22),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            _buildTextField(
+                              icon: Icons.email_outlined,
+                              label: "Email",
+                              keyboardType: TextInputType.emailAddress,
+                              onChanged: (v) => email = v,
+                              validator: (v) => v == null || v.isEmpty
+                                  ? "Please enter your email"
+                                  : null,
+                            ),
+                            _buildTextField(
+                              icon: Icons.lock_outline,
+                              label: "Password",
+                              obscure: true,
+                              onChanged: (v) => password = v,
+                              validator: (v) => v == null || v.isEmpty
+                                  ? "Please enter your password"
+                                  : null,
+                            ),
+                            const SizedBox(height: 20),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF62C6D9),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 14),
                                 ),
+                                onPressed: isLoading ? null : loginUser,
+                                child: isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text(
+                                        "Login",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
                               ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 15),
-                    TextButton(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/signup_page'),
-                      child: const Text(
-                        "Don't have an account? Sign Up",
-                        style: TextStyle(color: Color(0xFF62C6D9)),
+                  ),
+
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pushNamed(context, '/signup_page'),
+                    child: const Text(
+                      "Don't have an account? Sign Up",
+                      style: TextStyle(
+                          color: Color(0xFF62C6D9),
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pushNamed(
+                        context, '/change_password_page'),
+                    child: const Text(
+                      "Change Password",
+                      style: TextStyle(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/change_password_page'),
-                      child: const Text(
-                        "Change Password",
-                        style: TextStyle(color: Colors.redAccent),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

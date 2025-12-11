@@ -67,42 +67,55 @@ export async function createIntent(req, res) {
 // 🚀 Confirm & attach card to payment intent
 export async function confirmIntent(req, res) {
   try {
-    const { paymentId, paymentIntentId, paymentMethod } = req.body;
+    const { paymentId, paymentIntentId } = req.body;
 
-    if (!paymentId || !paymentIntentId || !paymentMethod) {
-      return res.status(400).json({ 
-        error: "paymentId + paymentIntentId + paymentMethod required" 
+    if (!paymentId) {
+      return res.status(400).json({
+        error: "paymentId is required",
       });
     }
 
-    // 1) نؤكد الدفع عند Stripe
-    const confirmed = await stripe.paymentIntents.confirm(paymentIntentId, {
-      payment_method: paymentMethod
-    });
+    const payment = await Payment.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ error: "Payment not found" });
+    }
 
-    if (confirmed.status !== "requires_capture") {
-      return res.status(400).json({ 
-        error: "Payment cannot be captured. Status: " + confirmed.status 
+    // نحدد ID الـ PaymentIntent:
+    const intentId = paymentIntentId || payment.txnId;
+    if (!intentId) {
+      return res.status(400).json({ error: "Missing paymentIntent id" });
+    }
+
+    // 🔍 فقط نعمل retrieve، ما بنعمل confirm من جديد
+    const intent = await stripe.paymentIntents.retrieve(intentId);
+
+    if (intent.status !== "requires_capture") {
+      return res.status(400).json({
+        error: "PaymentIntent not ready for capture. Status: " + intent.status,
       });
     }
 
-    // 2) حفظ الحالة في الـ DB
-    await Payment.findByIdAndUpdate(paymentId, { 
-      status: "CONFIRMED",
-      $push: { timeline: { action: "CONFIRMED", by: "SYSTEM", at: new Date() } }
+    // ✅ كل شيء تمام → نحدّث الـ DB
+    payment.status = "CONFIRMED";
+    payment.timeline.push({
+      action: "CONFIRMED",
+      by: "SYSTEM",
+      at: new Date(),
+      meta: { stripeStatus: intent.status },
     });
+    await payment.save();
 
-    res.json({ 
+    return res.json({
       status: "CONFIRMED",
+      stripeStatus: intent.status,
       nextStep: "Now call /api/payments/capture to finalize transfer",
-      stripeStatus: confirmed.status
     });
-
   } catch (err) {
     console.error("❌ confirmIntent:", err);
     res.status(500).json({ error: err.message });
   }
 }
+
 
 
 
