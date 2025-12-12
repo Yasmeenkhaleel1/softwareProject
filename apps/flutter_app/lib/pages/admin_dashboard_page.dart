@@ -1,5 +1,6 @@
 // lib/pages/admin_dashboard_page.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -39,9 +40,24 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   List<Map<String, dynamic>> monthlyBookings = [];
   List<Map<String, dynamic>> revenueByMonth = [];
   Map<String, dynamic> paymentsByStatus = {};
+
   List<dynamic> pendingExperts = [];
 
-  static const baseUrl = "http://localhost:5000";
+  // ✅ دالة ديناميكية للحصول على baseUrl بناءً على المنصة
+  String getBaseUrl() {
+    if (Platform.isAndroid) {
+      // للمحاكي الأندرويد
+      return "http://10.0.2.2:5000";
+    } else if (Platform.isIOS) {
+      // للمحاكي iOS
+      return "http://localhost:5000";
+    } else {
+      // للويب وسطح المكتب
+      return "http://localhost:5000";
+    }
+    // ملاحظة: إذا كان السيرفر على جهاز مختلف، استخدم IP ذلك الجهاز
+    // مثال: return "http://192.168.1.100:5000";
+  }
 
   @override
   void initState() {
@@ -66,6 +82,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
+      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
       final res = await http.get(
         Uri.parse("$baseUrl/api/admin/stats"),
         headers: {'Authorization': 'Bearer $token'},
@@ -97,9 +114,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           loadingStats = false;
         });
       } else {
+        debugPrint("❌ Stats error: ${res.statusCode}");
+        debugPrint("📡 Base URL: $baseUrl");
         setState(() => loadingStats = false);
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint("⚠️ Error fetching stats: $e");
+      debugPrint("🔍 تأكد أن السيرفر يعمل على ${getBaseUrl()}");
       setState(() => loadingStats = false);
     }
   }
@@ -109,6 +130,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
+      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
       final res = await http.get(
         Uri.parse("$baseUrl/api/admin/experts/pending"),
         headers: {'Authorization': 'Bearer $token'},
@@ -121,44 +143,55 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           loadingExperts = false;
         });
       } else {
+        debugPrint("❌ Pending experts error: ${res.statusCode}");
         setState(() => loadingExperts = false);
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint("⚠️ Error fetching pending experts: $e");
       setState(() => loadingExperts = false);
     }
   }
 
   Future<void> _approveExpert(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
 
-    final res = await http.patch(
-      Uri.parse("$baseUrl/api/admin/experts/$id/approve"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-
-    if (res.statusCode == 200) {
-      _fetchPendingExperts();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Expert approved successfully")),
+      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
+      final res = await http.patch(
+        Uri.parse("$baseUrl/api/admin/experts/$id/approve"),
+        headers: {'Authorization': 'Bearer $token'},
       );
+
+      if (res.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Expert approved successfully")),
+        );
+        _fetchPendingExperts();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed: ${res.statusCode}")),
+        );
+      }
+    } catch (e) {
+      debugPrint("❌ Approve error: $e");
     }
   }
 
   Future<void> _rejectExpert(String id) async {
-    final controller = TextEditingController();
+    final reasonController = TextEditingController();
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Reject Expert"),
         content: TextField(
-          controller: controller,
-          maxLines: 3,
+          controller: reasonController,
           decoration: const InputDecoration(
-            hintText: "Reason",
+            labelText: "Reason for rejection",
             border: OutlineInputBorder(),
           ),
+          maxLines: 3,
         ),
         actions: [
           TextButton(
@@ -176,19 +209,29 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
     if (confirmed != true) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
 
-    await http.patch(
-      Uri.parse("$baseUrl/api/admin/experts/$id/reject"),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({"reason": controller.text}),
-    );
+      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
+      final res = await http.patch(
+        Uri.parse("$baseUrl/api/admin/experts/$id/reject"),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({"reason": reasonController.text}),
+      );
 
-    _fetchPendingExperts();
+      if (res.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("❌ Expert rejected")),
+        );
+        _fetchPendingExperts();
+      }
+    } catch (e) {
+      debugPrint("Reject error: $e");
+    }
   }
 
   // ======================
@@ -201,17 +244,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
-      appBar: isMobile
-          ? PreferredSize(
-              preferredSize: const Size.fromHeight(160),
-              child: _buildMobileAppBar(),
-            )
-          : _buildWebAppBar(),
+      body: isMobile ? _buildMobileView() : _buildWebView(),
+    );
+  }
+
+  Widget _buildMobileView() {
+    return NestedScrollView(
+      headerSliverBuilder: (context, innerBoxIsScrolled) => [
+        _buildMobileAppBar(),
+      ],
       body: TabBarView(
         controller: _tabController,
         children: [
-          isMobile ? _buildMobileDashboard() : _buildWebDashboard(),
-          _buildPendingExperts(isMobile),
+          _buildMobileDashboard(),
+          _buildPendingExperts(),
           AdminPaymentsPage(),
           AdminEarningsPage(),
           const AdminDisputesPage(),
@@ -220,46 +266,100 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     );
   }
 
+  Widget _buildWebView() {
+    return Column(
+      children: [
+        _buildWebAppBar(),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildWebDashboard(),
+              _buildPendingExperts(),
+              AdminPaymentsPage(),
+              AdminEarningsPage(),
+              const AdminDisputesPage(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   // ======================
-  // WEB UI (ORIGINAL)
+  // WEB UI
   // ======================
 
   PreferredSize _buildWebAppBar() {
     return PreferredSize(
       preferredSize: const Size.fromHeight(165),
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF62C6D9),
-              Color(0xFF347C8B),
-              Color(0xFF244C63),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF62C6D9).withOpacity(0.85),
+                const Color(0xFF347C8B).withOpacity(0.90),
+                const Color(0xFF244C63).withOpacity(0.95),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 4),
+              SafeArea(
+                bottom: false,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              TweenAnimationBuilder(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: const Duration(milliseconds: 800),
+                builder: (context, value, child) => Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - value) * -10),
+                    child: child,
+                  ),
+                ),
+                child: const Text(
+                  "Admin Dashboard",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.white.withOpacity(0.25),
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                tabs: const [
+                  Tab(icon: Icon(Icons.dashboard_customize), text: "Dashboard"),
+                  Tab(icon: Icon(Icons.pending_actions), text: "Experts"),
+                  Tab(icon: Icon(Icons.payments), text: "Payments"),
+                  Tab(icon: Icon(Icons.show_chart), text: "Earnings"),
+                  Tab(icon: Icon(Icons.gavel_outlined), text: "Disputes"),
+                ],
+              ),
+              const SizedBox(height: 6),
             ],
           ),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 40),
-            const Text(
-              "Admin Dashboard",
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            TabBar(
-              controller: _tabController,
-              labelColor: Colors.white,
-              tabs: const [
-                Tab(text: "Dashboard"),
-                Tab(text: "Experts"),
-                Tab(text: "Payments"),
-                Tab(text: "Earnings"),
-                Tab(text: "Disputes"),
-              ],
-            ),
-          ],
         ),
       ),
     );
@@ -267,44 +367,47 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
   Widget _buildWebDashboard() {
     if (loadingStats) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF62C6D9)),
+      );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 4,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            children: [
-              StatCard(title: "Users", value: "$totalUsers", icon: Icons.people),
-              StatCard(
-                  title: "Experts",
-                  value: "$totalExperts",
-                  icon: Icons.engineering),
-              StatCard(
-                  title: "Services",
-                  value: "$totalServices",
-                  icon: Icons.home_repair_service),
-              StatCard(
-                  title: "Bookings",
-                  value: "$totalBookings",
-                  icon: Icons.event_available),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(child: ChartCard(data: monthlyBookings)),
-              const SizedBox(width: 20),
-              Expanded(child: RevenueChartCard(data: revenueByMonth)),
-            ],
-          ),
-        ],
+    return RefreshIndicator(
+      onRefresh: _fetchDashboardStats,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _headerGradientCard(),
+            const SizedBox(height: 24),
+            GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                StatCard(title: "Users", value: "$totalUsers", icon: Icons.people),
+                StatCard(title: "Experts", value: "$totalExperts", icon: Icons.engineering),
+                StatCard(title: "Services", value: "$totalServices", icon: Icons.home_repair_service),
+                StatCard(title: "Bookings", value: "$totalBookings", icon: Icons.event_available),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(child: ChartCard(data: monthlyBookings)),
+                const SizedBox(width: 20),
+                Expanded(child: RevenueChartCard(data: revenueByMonth)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            if (paymentsByStatus.isNotEmpty)
+              PaymentsStatusPieCard(data: paymentsByStatus),
+          ],
+        ),
       ),
     );
   }
@@ -313,117 +416,338 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   // MOBILE UI
   // ======================
 
- Widget _buildMobileAppBar() {
-  return SliverAppBar(
-    expandedHeight: 120,
-    collapsedHeight: 70,
-    floating: true,
-    pinned: true,
-    flexibleSpace: FlexibleSpaceBar(
-      background: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFF6EC1E4),
-              Color(0xFF2970B8),
-              Color(0xFF0F3D67)
+  SliverAppBar _buildMobileAppBar() {
+    return SliverAppBar(
+      expandedHeight: 140,
+      collapsedHeight: 80,
+      floating: true,
+      pinned: true,
+      snap: false,
+      backgroundColor: const Color(0xFF2970B8),
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF62C6D9).withOpacity(0.85),
+                const Color(0xFF347C8B).withOpacity(0.90),
+                const Color(0xFF244C63).withOpacity(0.95),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        title: const Text(
+          "Admin Dashboard",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: Container(
+          color: Colors.white,
+          child: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            indicator: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: const Color(0xFF2970B8).withOpacity(0.15),
+            ),
+            labelColor: const Color(0xFF2970B8),
+            unselectedLabelColor: Colors.grey,
+            tabs: const [
+              Tab(icon: Icon(Icons.dashboard_customize, size: 20), text: "Dashboard"),
+              Tab(icon: Icon(Icons.pending_actions, size: 20), text: "Experts"),
+              Tab(icon: Icon(Icons.payments, size: 20), text: "Payments"),
+              Tab(icon: Icon(Icons.show_chart, size: 20), text: "Earnings"),
+              Tab(icon: Icon(Icons.gavel_outlined, size: 20), text: "Disputes"),
             ],
           ),
         ),
-      ),
-      title: const Text(
-        "Admin Dashboard",
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      centerTitle: true,
-    ),
-    bottom: PreferredSize(
-      preferredSize: const Size.fromHeight(48),
-      child: TabBar(
-        controller: _tabController,
-        isScrollable: true,
-        indicatorWeight: 3,
-        indicatorSize: TabBarIndicatorSize.label,
-        tabs: const [
-          Tab(icon: Icon(Icons.dashboard, size: 22)),
-          Tab(icon: Icon(Icons.person, size: 22)),
-          Tab(icon: Icon(Icons.payments, size: 22)),
-          Tab(icon: Icon(Icons.show_chart, size: 22)),
-          Tab(icon: Icon(Icons.gavel, size: 22)),
-        ],
-      ),
-    ),
-  );
-}
-  Widget _buildMobileDashboard() {
-    if (loadingStats) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _mobileHeaderCard(),
-          const SizedBox(height: 20),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            children: [
-              _miniStat("Users", totalUsers),
-              _miniStat("Experts", totalExperts),
-              _miniStat("Services", totalServices),
-              _miniStat("Bookings", totalBookings),
-            ],
-          ),
-          const SizedBox(height: 20),
-          ChartCard(data: monthlyBookings),
-          const SizedBox(height: 20),
-          RevenueChartCard(data: revenueByMonth),
-          const SizedBox(height: 20),
-          PaymentsStatusPieCard(data: paymentsByStatus),
-        ],
       ),
     );
   }
 
-  Widget _mobileHeaderCard() {
+  Widget _buildMobileDashboard() {
+    if (loadingStats) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF62C6D9)),
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: _headerGradientCardMobile(),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.5,
+              children: [
+                _miniStat("Users", totalUsers),
+                _miniStat("Experts", totalExperts),
+                _miniStat("Services", totalServices),
+                _miniStat("Bookings", totalBookings),
+              ],
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                ChartCard(data: monthlyBookings),
+                const SizedBox(height: 20),
+                RevenueChartCard(data: revenueByMonth),
+                const SizedBox(height: 20),
+                if (paymentsByStatus.isNotEmpty)
+                  PaymentsStatusPieCard(data: paymentsByStatus),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _headerGradientCardMobile() {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
-            Color(0xFF6EC1E4),
-            Color(0xFF2970B8),
-            Color(0xFF0F3D67)
+            Color(0xFF62C6D9),
+            Color(0xFF347C8B),
+            Color(0xFF244C63),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _kpiChip("Revenue", totalRevenue),
-          _kpiChip("Experts", expertEarnings),
-          _kpiChip("Platform", platformEarnings),
-          _kpiChip("Refunds", refundsTotal),
+          const Text(
+            "Platform Earnings Overview",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Track total revenue, expert payouts and refunds in real-time.",
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _miniKpi(
+                label: "Total Revenue",
+                value: "\$${totalRevenue.toStringAsFixed(2)}",
+              ),
+              _miniKpi(
+                label: "Expert Earnings",
+                value: "\$${expertEarnings.toStringAsFixed(2)}",
+              ),
+              _miniKpi(
+                label: "Platform Fees",
+                value: "\$${platformEarnings.toStringAsFixed(2)}",
+              ),
+              _miniKpi(
+                label: "Refunds",
+                value: "\$${refundsTotal.toStringAsFixed(2)}",
+                chipColor: Colors.redAccent,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _kpiChip(String label, double value) {
-    return Chip(
-      label: Text("$label: \$${value.toStringAsFixed(0)}",
-          style: const TextStyle(color: Colors.white)),
-      backgroundColor: Colors.white.withOpacity(0.15),
+  Widget _headerGradientCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF62C6D9),
+            Color(0xFF347C8B),
+            Color(0xFF244C63),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Platform Earnings Overview",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "Track total revenue, expert payouts and refunds in real-time.",
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 18,
+                  runSpacing: 10,
+                  children: [
+                    _miniKpi(
+                      label: "Total Revenue",
+                      value: "\$${totalRevenue.toStringAsFixed(2)}",
+                    ),
+                    _miniKpi(
+                      label: "Expert Earnings",
+                      value: "\$${expertEarnings.toStringAsFixed(2)}",
+                    ),
+                    _miniKpi(
+                      label: "Platform Fees",
+                      value: "\$${platformEarnings.toStringAsFixed(2)}",
+                    ),
+                    _miniKpi(
+                      label: "Refunds",
+                      value: "\$${refundsTotal.toStringAsFixed(2)}",
+                      chipColor: Colors.redAccent,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            flex: 2,
+            child: Container(
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white24),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "Live Analytics",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    "Your dashboard provides real-time insights into platform performance.",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniKpi({
+    required String label,
+    required String value,
+    Color chipColor = Colors.greenAccent,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: chipColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -433,13 +757,33 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text("$value",
-              style:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(title, style: const TextStyle(color: Colors.grey)),
+          Text(
+            "$value",
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2933),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );
@@ -449,38 +793,76 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   // PENDING EXPERTS
   // ======================
 
-  Widget _buildPendingExperts(bool isMobile) {
+  Widget _buildPendingExperts() {
     if (loadingExperts) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF62C6D9)),
+      );
     }
 
     if (pendingExperts.isEmpty) {
-      return const Center(child: Text("No pending experts found"));
+      return const Center(
+        child: Text(
+          "No pending experts found.",
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
     }
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: pendingExperts.length,
-      itemBuilder: (_, i) {
-        final e = pendingExperts[i];
-        final user = e['userId'] ?? {};
-        final name = user['name'] ?? "Unknown";
+      itemBuilder: (context, index) {
+        final expert = pendingExperts[index];
+        final user = expert['userId'] ?? {};
+        final displayName = user['name'] ?? expert['name'] ?? "Unknown Expert";
         final email = user['email'] ?? "";
+        final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
+        final profileImageUrl = expert['profileImageUrl'] ??
+            "$baseUrl/uploads/default_profile.png";
 
         return Card(
-          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 3,
+          margin: const EdgeInsets.symmetric(vertical: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           child: ListTile(
-            title: Text(name),
+            leading: CircleAvatar(
+              radius: 25,
+              backgroundImage: profileImageUrl.startsWith("http")
+                  ? NetworkImage(profileImageUrl)
+                  : const AssetImage('assets/images/profile_placeholder.png')
+                      as ImageProvider,
+            ),
+            title: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminExpertPage(expertId: expert['_id']),
+                  ),
+                );
+              },
+              child: Text(
+                displayName,
+                style: const TextStyle(
+                  color: Colors.blueAccent,
+                  fontWeight: FontWeight.bold,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
             subtitle: Text(email),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                    icon: const Icon(Icons.check, color: Colors.green),
-                    onPressed: () => _approveExpert(e['_id'])),
+                  icon: const Icon(Icons.check_circle, color: Colors.green),
+                  onPressed: () => _approveExpert(expert['_id']),
+                ),
                 IconButton(
-                    icon: const Icon(Icons.close, color: Colors.red),
-                    onPressed: () => _rejectExpert(e['_id'])),
+                  icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                  onPressed: () => _rejectExpert(expert['_id']),
+                ),
               ],
             ),
           ),
@@ -490,48 +872,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   }
 }
 
-// ======================
-// PIE CHART
-// ======================
-
-class PaymentsStatusPieCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  const PaymentsStatusPieCard({super.key, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    if (data.isEmpty) {
-      return const Text("No payment data available");
-    }
-
-    final sections = <PieChartSectionData>[];
-    final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.red
-    ];
-
-    int i = 0;
-    data.forEach((k, v) {
-      sections.add(
-        PieChartSectionData(
-          value: (v['count'] ?? 0).toDouble(),
-          title: k,
-          color: colors[i++ % colors.length],
-        ),
-      );
-    });
-
-    return SizedBox(
-      height: 220,
-      child: PieChart(PieChartData(sections: sections)),
-    );
-  }
-}
-// ======================
-// REVENUE LINE CHART
-// ======================
+/* ============================================
+   📈 Revenue Chart (Line chart - Admin)
+   ============================================ */
 
 class RevenueChartCard extends StatelessWidget {
   final List<Map<String, dynamic>> data;
@@ -539,27 +882,29 @@ class RevenueChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final revenueSpots = <FlSpot>[];
-    final expertSpots = <FlSpot>[];
+    final months = <FlSpot>[];
+    final netSpots = <FlSpot>[];
     double maxY = 0;
 
     for (final row in data) {
       final month = (row['month'] ?? 0).toDouble();
       final revenue = (row['revenue'] ?? 0).toDouble();
-      final expert = (row['netToExpert'] ?? 0).toDouble();
+      final net = (row['netToExpert'] ?? 0).toDouble();
 
-      if (month <= 0) continue;
+      if (month == 0) continue;
+      months.add(FlSpot(month, revenue));
+      netSpots.add(FlSpot(month, net));
 
-      revenueSpots.add(FlSpot(month, revenue));
-      expertSpots.add(FlSpot(month, expert));
-
-      maxY = [maxY, revenue, expert].reduce((a, b) => a > b ? a : b);
+      if (revenue > maxY) maxY = revenue;
+      if (net > maxY) maxY = net;
     }
 
     if (maxY == 0) maxY = 1;
 
     const primary = Color(0xFF62C6D9);
-    const dark = Color(0xFF244C63);
+    const accent = Color(0xFF244C63);
+
+    final isMobile = MediaQuery.of(context).size.width < 760;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -568,7 +913,7 @@ class RevenueChartCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -585,20 +930,19 @@ class RevenueChartCard extends StatelessWidget {
               color: Color(0xFF1F2933),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           const Text(
-            "Monthly platform revenue compared to expert payouts",
+            "Track how much the platform earns vs how much goes to experts.",
             style: TextStyle(fontSize: 11, color: Colors.grey),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           SizedBox(
-            height: 200,
+            height: isMobile ? 180 : 200,
             child: LineChart(
               LineChartData(
                 minX: 1,
                 maxX: 12,
-                maxY: maxY * 1.25,
-                borderData: FlBorderData(show: false),
+                maxY: maxY * 1.2,
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
@@ -612,17 +956,20 @@ class RevenueChartCard extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 36,
-                      getTitlesWidget: (v, _) => Text(
-                        "\$${v.toInt()}",
-                        style: const TextStyle(fontSize: 9),
-                      ),
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          "\$${value.toInt()}",
+                          style: const TextStyle(fontSize: 9),
+                        );
+                      },
                     ),
                   ),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      getTitlesWidget: (v, _) {
-                        const months = [
+                      reservedSize: 18,
+                      getTitlesWidget: (value, meta) {
+                        const labels = [
                           "",
                           "Jan",
                           "Feb",
@@ -637,39 +984,334 @@ class RevenueChartCard extends StatelessWidget {
                           "Nov",
                           "Dec"
                         ];
-                        final i = v.toInt();
-                        if (i < 1 || i > 12) return const SizedBox();
-                        return Text(months[i],
-                            style: const TextStyle(fontSize: 9));
+                        final idx = value.toInt();
+                        if (idx < 1 || idx > 12) return const SizedBox();
+                        return Text(
+                          labels[idx],
+                          style: const TextStyle(fontSize: 9),
+                        );
                       },
                     ),
                   ),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
+                borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: revenueSpots,
+                    spots: months,
                     isCurved: true,
                     color: primary,
                     barWidth: 3,
                     dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        colors: [
+                          primary.withOpacity(0.2),
+                          primary.withOpacity(0.0),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
                   ),
                   LineChartBarData(
-                    spots: expertSpots,
+                    spots: netSpots,
                     isCurved: true,
-                    color: dark,
+                    color: accent,
                     barWidth: 2,
                     dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(show: false),
                   ),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: const [
+              _LegendDot(color: primary, label: "Total revenue"),
+              SizedBox(width: 16),
+              _LegendDot(color: accent, label: "Net to experts"),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+/* ============================================
+   🥧 Payments Status Pie (Admin)
+   ============================================ */
+
+class PaymentsStatusPieCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const PaymentsStatusPieCard({super.key, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final importantStatuses = [
+      "AUTHORIZED",
+      "CAPTURED",
+      "REFUND_PENDING",
+      "REFUNDED",
+      "FAILED",
+    ];
+
+    final entries = <Map<String, dynamic>>[];
+    int totalCount = 0;
+
+    for (final status in importantStatuses) {
+      final row = data[status];
+      if (row == null) continue;
+      final count = (row['count'] ?? 0) as int;
+      if (count == 0) continue;
+      totalCount += count;
+      entries.add({
+        "status": status,
+        "count": count,
+      });
+    }
+
+    if (entries.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: const Text(
+          "No payment status data yet.",
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    final colors = [
+      const Color(0xFF62C6D9),
+      const Color(0xFF347C8B),
+      const Color(0xFF244C63),
+      Colors.orangeAccent,
+      Colors.redAccent,
+    ];
+
+    final isMobile = MediaQuery.of(context).size.width < 760;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: isMobile
+          ? Column(
+              children: [
+                const Text(
+                  "Payments Status Breakdown",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: Color(0xFF1F2933),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  "See how many payments are captured, refunded or still pending.",
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 200,
+                  child: PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 40,
+                      sections: List.generate(entries.length, (i) {
+                        final e = entries[i];
+                        final count = e['count'] as int;
+                        final percent = (count / totalCount) * 100;
+                        return PieChartSectionData(
+                          value: count.toDouble(),
+                          color: colors[i % colors.length],
+                          radius: 70,
+                          title: "${percent.toStringAsFixed(1)}%",
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...List.generate(entries.length, (i) {
+                  final e = entries[i];
+                  final count = e['count'] as int;
+                  final status = e['status'] as String;
+                  final percent = (count / totalCount) * 100;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: colors[i % colors.length],
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            status,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          "$count • ${percent.toStringAsFixed(1)}%",
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 200,
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 40,
+                        sections: List.generate(entries.length, (i) {
+                          final e = entries[i];
+                          final count = e['count'] as int;
+                          final percent = (count / totalCount) * 100;
+                          return PieChartSectionData(
+                            value: count.toDouble(),
+                            color: colors[i % colors.length],
+                            radius: 70,
+                            title: "${percent.toStringAsFixed(1)}%",
+                            titleStyle: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Payments Status Breakdown",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: Color(0xFF1F2933),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        "See how many payments are captured, refunded or still pending.",
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 12),
+                      ...List.generate(entries.length, (i) {
+                        final e = entries[i];
+                        final count = e['count'] as int;
+                        final status = e['status'] as String;
+                        final percent = (count / totalCount) * 100;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: colors[i % colors.length],
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  status,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                "$count • ${percent.toStringAsFixed(1)}%",
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _LegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Colors.grey),
+        ),
+      ],
     );
   }
 }

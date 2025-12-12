@@ -1,5 +1,6 @@
 // lib/pages/admin_expert_page.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,7 +15,20 @@ class AdminExpertPage extends StatefulWidget {
 }
 
 class _AdminExpertPageState extends State<AdminExpertPage> {
-  static const baseUrl = "http://localhost:5000";
+  // ✅ دالة ديناميكية للحصول على baseUrl بناءً على المنصة
+  String getBaseUrl() {
+    if (Platform.isAndroid) {
+      // للمحاكي الأندرويد
+      return "http://10.0.2.2:5000";
+    } else if (Platform.isIOS) {
+      // للمحاكي iOS
+      return "http://localhost:5000";
+    } else {
+      // للويب وسطح المكتب
+      return "http://localhost:5000";
+    }
+  }
+  
   bool loading = true;
   Map<String, dynamic>? expert;
 
@@ -28,6 +42,7 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
+      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
 
       final res = await http.get(
         Uri.parse("$baseUrl/api/admin/experts/${widget.expertId}/profile"),
@@ -44,10 +59,12 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
         });
       } else {
         debugPrint("❌ Error ${res.statusCode}: ${res.body}");
+        debugPrint("📡 Base URL: $baseUrl");
         setState(() => loading = false);
       }
     } catch (e) {
       debugPrint("❌ Error fetching profile: $e");
+      debugPrint("🔍 تأكد أن السيرفر يعمل على ${getBaseUrl()}");
       setState(() => loading = false);
     }
   }
@@ -55,6 +72,7 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
   Future<void> _approveExpert() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
+    final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
 
     final res = await http.patch(
       Uri.parse("$baseUrl/api/admin/experts/${widget.expertId}/approve"),
@@ -88,7 +106,10 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
           maxLines: 3,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false), 
+            child: const Text("Cancel")
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
@@ -102,6 +123,7 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
 
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
+    final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
 
     final res = await http.patch(
       Uri.parse("$baseUrl/api/admin/experts/${widget.expertId}/reject"),
@@ -153,14 +175,38 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
     }
 
     if (expert == null || expert!['profile'] == null) {
-      return const Scaffold(body: Center(child: Text("Expert not found")));
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 50, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text(
+                "Expert not found",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Expert ID: ${widget.expertId}",
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _fetchExpertProfile,
+                child: const Text("Retry"),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return isMobile ? _buildMobileView() : _buildWebView();
   }
 
   // ======================================================
-  // 🔒 WEB VIEW — كودك الأصلي بدون أي تغيير
+  // 🔒 WEB VIEW
   // ======================================================
   Widget _buildWebView() {
     final user = expert!['user'] ?? {};
@@ -388,7 +434,7 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
   }
 
   // ======================================================
-  // 📱 MOBILE VIEW — تصميم محترف وعالمي
+  // 📱 MOBILE VIEW
   // ======================================================
   Widget _buildMobileView() {
     final user = expert!['user'] ?? {};

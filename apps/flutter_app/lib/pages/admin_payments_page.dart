@@ -1,4 +1,6 @@
+// lib/pages/admin_payments_page.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,7 +14,19 @@ class AdminPaymentsPage extends StatefulWidget {
 }
 
 class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
-  static const baseUrl = "http://localhost:5000";
+  // ✅ دالة ديناميكية للحصول على baseUrl بناءً على المنصة
+  String getBaseUrl() {
+    if (Platform.isAndroid) {
+      // للمحاكي الأندرويد
+      return "http://10.0.2.2:5000";
+    } else if (Platform.isIOS) {
+      // للمحاكي iOS
+      return "http://localhost:5000";
+    } else {
+      // للويب وسطح المكتب
+      return "http://localhost:5000";
+    }
+  }
 
   bool _loading = true;
   String? _error;
@@ -43,6 +57,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
+      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
 
       final res = await http.get(
         Uri.parse("$baseUrl/api/admin/payments"),
@@ -55,9 +70,11 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
         _applyFilters();
       } else {
         _error = "Error: ${res.statusCode}";
+        debugPrint("📡 Base URL: $baseUrl");
       }
     } catch (e) {
       _error = e.toString();
+      debugPrint("🔍 تأكد أن السيرفر يعمل على ${getBaseUrl()}");
     }
 
     setState(() => _loading = false);
@@ -232,6 +249,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
+      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
       final parsedAmount = double.tryParse(amountController.text.trim());
 
       final res = await http.post(
@@ -913,7 +931,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
   }
 
   // ============================
-  // 🖥️ WEB VIEW (نفس الكود الأصلي)
+  // 🖥️ WEB VIEW
   // ============================
   Widget _buildWebView() {
     return RefreshIndicator(
@@ -957,7 +975,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
   }
 
   // ============================
-  // 🎨 WEB COMPONENTS (نفس الكود الأصلي)
+  // 🎨 WEB COMPONENTS
   // ============================
   Widget _buildHeader() {
     return Container(
