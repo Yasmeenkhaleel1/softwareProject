@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
+import '../config/api_config.dart'; 
 class LandingPage extends StatefulWidget {
   final bool isLoggedIn;
   final void Function() onLogout;
@@ -22,7 +22,9 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  static const baseUrl = "http://localhost:5000";
+ static String get baseUrl => ApiConfig.baseUrl;
+
+
   bool loading = false;
   String? role;
 
