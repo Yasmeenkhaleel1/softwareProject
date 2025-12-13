@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_service.dart';
+import '../../config/api_config.dart';
 
 class ChatPage extends StatefulWidget {
   final String conversationId;
@@ -135,8 +136,8 @@ class _ChatPageState extends State<ChatPage> {
         _sending = true;
       });
 
-      final uploaded =
-          await ApiService.uploadChatAttachment(file); // {url, originalName..}
+      final uploaded = await ApiService.uploadChatAttachment(file);
+      // {url, originalName, mimeType, ...}
 
       final attachmentUrl = (uploaded['url'] ?? '').toString();
       final attachmentName =
@@ -174,6 +175,10 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ نصلح رابط صورة الطرف الآخر (لو فيه)
+    final fixedAvatar =
+        ApiConfig.fixAssetUrl(widget.otherUserAvatar ?? '');
+
     return Scaffold(
       backgroundColor: const Color(0xFFE9F1F5),
       appBar: AppBar(
@@ -184,36 +189,102 @@ class _ChatPageState extends State<ChatPage> {
           children: [
             CircleAvatar(
               backgroundColor: Colors.white.withOpacity(0.2),
-              backgroundImage: (widget.otherUserAvatar != null &&
-                      widget.otherUserAvatar!.isNotEmpty)
-                  ? NetworkImage(widget.otherUserAvatar!)
+              backgroundImage: fixedAvatar.isNotEmpty
+                  ? NetworkImage(fixedAvatar)
                   : null,
-              child: (widget.otherUserAvatar == null ||
-                      widget.otherUserAvatar!.isEmpty)
+              child: fixedAvatar.isEmpty
                   ? Text(
                       widget.otherUserName.isNotEmpty
                           ? widget.otherUserName[0].toUpperCase()
                           : '?',
                       style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     )
                   : null,
             ),
             const SizedBox(width: 10),
-            Text(
-              widget.otherUserName,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.otherUserName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    "Secure one-to-one chat",
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _buildMessagesBody(),
-          ),
-          _buildInputBar(),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool isWide = constraints.maxWidth >= 900;
+
+          return Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFE7F3F7), Color(0xFFF7FBFD)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isWide ? 900 : double.infinity,
+                ),
+                child: Column(
+                  children: [
+                    // ===== منطقة الرسائل =====
+                    Expanded(
+                      child: Container(
+                        margin: EdgeInsets.symmetric(
+                          horizontal: isWide ? 16 : 0,
+                          vertical: isWide ? 12 : 0,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE9F1F5),
+                          borderRadius: isWide
+                              ? BorderRadius.circular(18)
+                              : BorderRadius.zero,
+                          boxShadow: isWide
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: _buildMessagesBody(),
+                      ),
+                    ),
+
+                    // ===== شريط الإدخال =====
+                    _buildInputBar(isWide: isWide),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -250,8 +321,9 @@ class _ChatPageState extends State<ChatPage> {
       itemBuilder: (context, index) {
         final m = _messages[index];
 
-        final from =
-            (m['from'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+        final from = (m['from'] as Map?)
+                ?.cast<String, dynamic>() ??
+            <String, dynamic>{};
         final isMine = from['_id']?.toString() == _myUserId;
 
         final text = (m['text'] ?? '').toString();
@@ -270,7 +342,7 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Widget _buildInputBar() {
+  Widget _buildInputBar({required bool isWide}) {
     return SafeArea(
       top: false,
       child: Container(
@@ -315,8 +387,7 @@ class _ChatPageState extends State<ChatPage> {
             ),
             const SizedBox(width: 8),
             CircleAvatar(
-              backgroundColor:
-                  _sending ? Colors.grey : _brand,
+              backgroundColor: _sending ? Colors.grey : _brand,
               child: IconButton(
                 icon: const Icon(Icons.send, size: 18),
                 color: Colors.white,
@@ -353,6 +424,15 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final bgColor = isMine ? _brand : Colors.white;
     final textColor = isMine ? Colors.white : Colors.black87;
+    final attachIconColor = isMine ? Colors.white : const Color(0xFF285E6E);
+    final tsColor =
+        isMine ? Colors.white.withOpacity(0.7) : Colors.grey.shade500;
+
+    final String tsShort = timestamp.isNotEmpty
+        ? (timestamp.length >= 16
+            ? timestamp.substring(0, 16)
+            : timestamp)
+        : "";
 
     return Align(
       alignment:
@@ -416,10 +496,10 @@ class _MessageBubble extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.insert_drive_file,
                         size: 18,
-                        color: Colors.white,
+                        color: attachIconColor,
                       ),
                       const SizedBox(width: 6),
                       Flexible(
@@ -441,15 +521,14 @@ class _MessageBubble extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 4),
-            Text(
-              timestamp.isNotEmpty
-                  ? timestamp.substring(0, 16)
-                  : "",
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 9,
+            if (tsShort.isNotEmpty)
+              Text(
+                tsShort,
+                style: TextStyle(
+                  color: tsColor,
+                  fontSize: 9,
+                ),
               ),
-            ),
           ],
         ),
       ),

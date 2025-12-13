@@ -17,7 +17,9 @@ class AdminDisputesPage extends StatefulWidget {
 class _AdminDisputesPageState extends State<AdminDisputesPage> {
   bool _loading = true;
   String? _error;
-  List<dynamic> _disputes = [];
+
+  // ✅ نخليها Map<String,dynamic>
+  List<Map<String, dynamic>> _disputes = [];
 
   // ALL, OPEN, UNDER_REVIEW, RESOLVED_CUSTOMER, RESOLVED_EXPERT
   String _statusFilter = 'OPEN';
@@ -51,8 +53,15 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
       }
 
       final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final rawList = (body['disputes'] as List?) ?? [];
+
+      // ✅ نحول كل عنصر لـ Map<String,dynamic>
       setState(() {
-        _disputes = (body['disputes'] as List?) ?? [];
+        _disputes = rawList
+            .whereType<Map>()
+            .map<Map<String, dynamic>>(
+                (e) => Map<String, dynamic>.from(e as Map))
+            .toList();
       });
     } catch (e) {
       setState(() {
@@ -65,7 +74,8 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
     }
   }
 
-  List<dynamic> get _visibleDisputes {
+  // ✅ ترجع List<Map<String,dynamic>>
+  List<Map<String, dynamic>> get _visibleDisputes {
     if (_statusFilter == 'ALL') return _disputes;
     return _disputes
         .where((d) => (d['status'] ?? '') == _statusFilter)
@@ -80,13 +90,13 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
   Color _statusColor(String status) {
     switch (status) {
       case 'OPEN':
-        return const Color(0xFFEB5757); // أحمر ناعم
+        return const Color(0xFFEB5757);
       case 'UNDER_REVIEW':
-        return const Color(0xFFF2C94C); // أصفر
+        return const Color(0xFFF2C94C);
       case 'RESOLVED_CUSTOMER':
-        return const Color(0xFF27AE60); // أخضر
+        return const Color(0xFF27AE60);
       case 'RESOLVED_EXPERT':
-        return const Color(0xFF2D9CDB); // أزرق
+        return const Color(0xFF2D9CDB);
       default:
         return Colors.grey;
     }
@@ -110,271 +120,274 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
   }
 
   Future<void> _openDisputeDetails(Map<String, dynamic> dispute) async {
+    // ✅ نتأكد إنه Map<String,dynamic> clean
+    final safeDispute = Map<String, dynamic>.from(dispute);
+
     final updated = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _DisputeDecisionDialog(dispute: dispute),
+      builder: (_) => _DisputeDecisionDialog(dispute: safeDispute),
     );
 
     if (updated == true) {
-      // أعد تحميل القائمة بعد حفظ القرار
       _fetchDisputes();
     }
   }
 
- @override
-Widget build(BuildContext context) {
-  const primary = Color(0xFF285E6E);
+  @override
+  Widget build(BuildContext context) {
+    const primary = Color(0xFF285E6E);
 
-  // 🔹 محتوى الصفحة بدون Scaffold (عشان ما يطلع AppBar ثاني)
-  return Container(
-    color: const Color(0xFFF4F7FB),
-    child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1200),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ✅ العنوان + زر التحديث
-              Row(
-                children: [
-                  const Icon(Icons.gavel_outlined,
-                      color: primary, size: 22),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Disputes & Refunds',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: primary,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: _fetchDisputes,
-                    tooltip: 'Refresh',
-                    icon: const Icon(Icons.refresh),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // عنوان وتعريف بسيط
-              const Text(
-                'Customer disputes & refund requests',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: primary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Review disputes, check customer messages and attachments, '
-                'and decide whether a refund should be issued.',
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 20),
-
-              // الكروت الإحصائية
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
+    return Container(
+      color: const Color(0xFFF4F7FB),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    _StatCard(
-                      label: 'All disputes',
-                      value: _countStatus('ALL').toString(),
-                      color: const Color(0xFF4C6FFF),
-                      icon: Icons.all_inbox_outlined,
+                    const Icon(Icons.gavel_outlined, color: primary, size: 22),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Disputes & Refunds',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: primary,
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    _StatCard(
-                      label: 'Open',
-                      value: _countStatus('OPEN').toString(),
-                      color: const Color(0xFFEB5757),
-                      icon: Icons.markunread_mailbox_outlined,
-                    ),
-                    const SizedBox(width: 12),
-                    _StatCard(
-                      label: 'Under review',
-                      value: _countStatus('UNDER_REVIEW').toString(),
-                      color: const Color(0xFFF2C94C),
-                      icon: Icons.manage_search_outlined,
-                    ),
-                    const SizedBox(width: 12),
-                    _StatCard(
-                      label: 'Resolved',
-                      value: (_countStatus('RESOLVED_CUSTOMER') +
-                              _countStatus('RESOLVED_EXPERT'))
-                          .toString(),
-                      color: const Color(0xFF27AE60),
-                      icon: Icons.check_circle_outline,
+                    const Spacer(),
+                    IconButton(
+                      onPressed: _fetchDisputes,
+                      tooltip: 'Refresh',
+                      icon: const Icon(Icons.refresh),
                     ),
                   ],
                 ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // الفلاتر
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildFilterChip('ALL'),
-                  _buildFilterChip('OPEN'),
-                  _buildFilterChip('UNDER_REVIEW'),
-                  _buildFilterChip('RESOLVED_CUSTOMER'),
-                  _buildFilterChip('RESOLVED_EXPERT'),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // الجدول الرئيسي
-              Expanded(
-                child: Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                const SizedBox(height: 8),
+                const Text(
+                  'Customer disputes & refund requests',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: primary,
                   ),
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _error != null
-                            ? Center(
-                                child: Text(
-                                  _error!,
-                                  style: const TextStyle(color: Colors.red),
-                                ),
-                              )
-                            : _visibleDisputes.isEmpty
-                                ? const Center(
-                                    child: Text(
-                                      'No disputes found for this filter.',
-                                      style: TextStyle(color: Colors.grey),
-                                    ),
-                                  )
-                                : Column(
-                                    children: [
-                                      // عنوان الجدول
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            '${_visibleDisputes.length} dispute(s) found',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Divider(height: 1),
-                                      const SizedBox(height: 8),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Review disputes, check customer messages and attachments, '
+                  'and decide whether a refund should be issued.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 20),
 
-                                      Expanded(
-                                        child: SingleChildScrollView(
-                                          scrollDirection: Axis.horizontal,
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _StatCard(
+                        label: 'All disputes',
+                        value: _countStatus('ALL').toString(),
+                        color: const Color(0xFF4C6FFF),
+                        icon: Icons.all_inbox_outlined,
+                      ),
+                      const SizedBox(width: 12),
+                      _StatCard(
+                        label: 'Open',
+                        value: _countStatus('OPEN').toString(),
+                        color: const Color(0xFFEB5757),
+                        icon: Icons.markunread_mailbox_outlined,
+                      ),
+                      const SizedBox(width: 12),
+                      _StatCard(
+                        label: 'Under review',
+                        value: _countStatus('UNDER_REVIEW').toString(),
+                        color: const Color(0xFFF2C94C),
+                        icon: Icons.manage_search_outlined,
+                      ),
+                      const SizedBox(width: 12),
+                      _StatCard(
+                        label: 'Resolved',
+                        value: (_countStatus('RESOLVED_CUSTOMER') +
+                                _countStatus('RESOLVED_EXPERT'))
+                            .toString(),
+                        color: const Color(0xFF27AE60),
+                        icon: Icons.check_circle_outline,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildFilterChip('ALL'),
+                    _buildFilterChip('OPEN'),
+                    _buildFilterChip('UNDER_REVIEW'),
+                    _buildFilterChip('RESOLVED_CUSTOMER'),
+                    _buildFilterChip('RESOLVED_EXPERT'),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                Expanded(
+                  child: Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _error != null
+                              ? Center(
+                                  child: Text(
+                                    _error!,
+                                    style:
+                                        const TextStyle(color: Colors.red),
+                                  ),
+                                )
+                              : _visibleDisputes.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        'No disputes found for this filter.',
+                                        style:
+                                            TextStyle(color: Colors.grey),
+                                      ),
+                                    )
+                                  : Column(
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              '${_visibleDisputes.length} dispute(s) found',
+                                              style: const TextStyle(
+                                                fontWeight:
+                                                    FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        const Divider(height: 1),
+                                        const SizedBox(height: 8),
+                                        Expanded(
                                           child: SingleChildScrollView(
-                                            child: DataTable(
-                                              columnSpacing: 30,
-                                              headingRowHeight: 30,
-                                              dataRowMinHeight: 70,
-                                              dataRowMaxHeight: 90,
-                                              columns: const [
-                                                DataColumn(
-                                                  label: Text(
-                                                    'Created',
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600),
+                                            scrollDirection:
+                                                Axis.horizontal,
+                                            child: SingleChildScrollView(
+                                              child: DataTable(
+                                                columnSpacing: 30,
+                                                headingRowHeight: 30,
+                                                dataRowMinHeight: 70,
+                                                dataRowMaxHeight: 90,
+                                                columns: const [
+                                                  DataColumn(
+                                                    label: Text(
+                                                      'Created',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ),
                                                   ),
-                                                ),
-                                                DataColumn(
-                                                  label: Text(
-                                                    'Booking',
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600),
+                                                  DataColumn(
+                                                    label: Text(
+                                                      'Booking',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ),
                                                   ),
-                                                ),
-                                                DataColumn(
-                                                  label: Text(
-                                                    'Customer',
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600),
+                                                  DataColumn(
+                                                    label: Text(
+                                                      'Customer',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ),
                                                   ),
-                                                ),
-                                                DataColumn(
-                                                  label: Text(
-                                                    'Expert',
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600),
+                                                  DataColumn(
+                                                    label: Text(
+                                                      'Expert',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ),
                                                   ),
-                                                ),
-                                                DataColumn(
-                                                  label: Text(
-                                                    'Amount',
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600),
+                                                  DataColumn(
+                                                    label: Text(
+                                                      'Amount',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ),
                                                   ),
-                                                ),
-                                                DataColumn(
-                                                  label: Text(
-                                                    'Type',
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600),
+                                                  DataColumn(
+                                                    label: Text(
+                                                      'Type',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ),
                                                   ),
-                                                ),
-                                                DataColumn(
-                                                  label: Text(
-                                                    'Status',
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600),
+                                                  DataColumn(
+                                                    label: Text(
+                                                      'Status',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ),
                                                   ),
-                                                ),
-                                                DataColumn(
-                                                  label: Text(
-                                                    'Action',
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600),
+                                                  DataColumn(
+                                                    label: Text(
+                                                      'Action',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ),
                                                   ),
-                                                ),
-                                              ],
-                                              rows: _visibleDisputes
-                                                  .map(
-                                                    (d) =>
-                                                        _buildDataRow(d),
-                                                  )
-                                                  .toList(),
+                                                ],
+                                                rows: _visibleDisputes
+                                                    .map(
+                                                      (d) =>
+                                                          _buildDataRow(d),
+                                                    )
+                                                    .toList(),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
+                                      ],
+                                    ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   Widget _buildFilterChip(String status) {
     final selected = _statusFilter == status;
@@ -397,10 +410,19 @@ Widget build(BuildContext context) {
   }
 
   DataRow _buildDataRow(Map<String, dynamic> d) {
-    final booking = (d['booking'] ?? {}) as Map<String, dynamic>;
-    final customer = (d['customer'] ?? {}) as Map<String, dynamic>;
-    final expert = (d['expert'] ?? {}) as Map<String, dynamic>;
-    final payment = (d['payment'] ?? {}) as Map<String, dynamic>;
+    // ✅ كل nested map نحولها بأمان
+    final booking =
+        (d['booking'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+    final customer =
+        (d['customer'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+    final expert =
+        (d['expert'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+    final payment =
+        (d['payment'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
 
     final createdAtStr = d['createdAt']?.toString();
     String createdShort = '';
@@ -427,8 +449,10 @@ Widget build(BuildContext context) {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(booking['code'] ?? '-',
-                  style: const TextStyle(fontWeight: FontWeight.w500)),
+              Text(
+                booking['code'] ?? '-',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
               const SizedBox(height: 2),
               Text(
                 booking['status'] ?? '',
@@ -449,7 +473,8 @@ Widget build(BuildContext context) {
               const SizedBox(height: 2),
               Text(
                 customer['email'] ?? '',
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                style:
+                    const TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ],
           ),
@@ -463,26 +488,28 @@ Widget build(BuildContext context) {
               const SizedBox(height: 2),
               Text(
                 expert['email'] ?? '',
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                style:
+                    const TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ],
           ),
         ),
         DataCell(Text('$amount $currency')),
-        DataCell(Text(type)),
+        DataCell(Text(type.toString())),
         DataCell(
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: _statusColor(status).withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              _statusLabel(status),
+              _statusLabel(status.toString()),
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: _statusColor(status),
+                color: _statusColor(status.toString()),
               ),
             ),
           ),
@@ -498,9 +525,8 @@ Widget build(BuildContext context) {
   }
 }
 
-/*───────────────────────────────
-   كارت إحصائي صغير أعلى الصفحة
-────────────────────────────────*/
+/*──────────────  الكروت الصغيرة  ─────────────*/
+
 class _StatCard extends StatelessWidget {
   final String label;
   final String value;
@@ -557,7 +583,10 @@ class _StatCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
                 ),
               ],
             ),
@@ -568,9 +597,8 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/*───────────────────────────────
-  Dialog لعرض تفاصيل النزاع + اتخاذ القرار
-────────────────────────────────*/
+/*──────────────  Dialog القرار  ─────────────*/
+
 class _DisputeDecisionDialog extends StatefulWidget {
   final Map<String, dynamic> dispute;
 
@@ -582,7 +610,7 @@ class _DisputeDecisionDialog extends StatefulWidget {
 }
 
 class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
-  late String _resolution; // NONE / REFUND_FULL / REFUND_PARTIAL / NO_REFUND
+  late String _resolution;
   late TextEditingController _refundController;
   late TextEditingController _notesController;
   bool _saving = false;
@@ -591,7 +619,8 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
   void initState() {
     super.initState();
     final dispute = widget.dispute;
-    _resolution = (dispute['resolution'] ?? 'NONE') as String;
+
+    _resolution = (dispute['resolution'] ?? 'NONE').toString();
     if (_resolution == 'NONE') _resolution = 'NO_REFUND';
 
     final refundAmount = (dispute['refundAmount'] ?? 0).toString();
@@ -599,8 +628,9 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
       text: refundAmount == '0' ? '' : refundAmount,
     );
 
-    _notesController =
-        TextEditingController(text: dispute['adminNotes']?.toString() ?? '');
+    _notesController = TextEditingController(
+      text: dispute['adminNotes']?.toString() ?? '',
+    );
   }
 
   @override
@@ -619,7 +649,11 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
 
   Future<void> _saveDecision() async {
     final dispute = widget.dispute;
-    final payment = (dispute['payment'] ?? {}) as Map<String, dynamic>;
+
+    final payment =
+        (dispute['payment'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+
     double? refundAmount;
 
     if (_resolution == 'REFUND_PARTIAL') {
@@ -690,12 +724,21 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
   @override
   Widget build(BuildContext context) {
     final dispute = widget.dispute;
-    final booking = (dispute['booking'] ?? {}) as Map<String, dynamic>;
-    final customer = (dispute['customer'] ?? {}) as Map<String, dynamic>;
-    final expert = (dispute['expert'] ?? {}) as Map<String, dynamic>;
-    final payment = (dispute['payment'] ?? {}) as Map<String, dynamic>;
+
+    final booking =
+        (dispute['booking'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+    final customer =
+        (dispute['customer'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+    final expert =
+        (dispute['expert'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+    final payment =
+        (dispute['payment'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
     final attachments =
-        (dispute['attachments'] as List?)?.cast<String>() ?? [];
+        (dispute['attachments'] as List?)?.cast<String>() ?? <String>[];
 
     const accent = Color(0xFF285E6E);
 
@@ -707,11 +750,12 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               decoration: const BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(18)),
                 color: Color(0xFFF4F7FB),
               ),
               child: Row(
@@ -727,7 +771,8 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
                   ),
                   const Spacer(),
                   IconButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
+                    onPressed:
+                        _saving ? null : () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -742,7 +787,6 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Booking + payment summary
                       Wrap(
                         spacing: 16,
                         runSpacing: 12,
@@ -780,7 +824,6 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
 
                       const SizedBox(height: 16),
 
-                      // Customer message
                       const Text(
                         'Customer message',
                         style: TextStyle(
@@ -795,17 +838,18 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12),
                           color: const Color(0xFFF8FAFC),
-                          border: Border.all(color: const Color(0xFFE0E6F0)),
+                          border: Border.all(
+                            color: const Color(0xFFE0E6F0),
+                          ),
                         ),
                         child: Text(
-                          dispute['customerMessage'] ?? '',
+                          dispute['customerMessage']?.toString() ?? '',
                           style: const TextStyle(fontSize: 13.5),
                         ),
                       ),
 
                       const SizedBox(height: 16),
 
-                      // Attachments
                       const Text(
                         'Attachments',
                         style: TextStyle(
@@ -817,8 +861,10 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
                       attachments.isEmpty
                           ? const Text(
                               'No attachments provided.',
-                              style:
-                                  TextStyle(fontSize: 13, color: Colors.grey),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey,
+                              ),
                             )
                           : Wrap(
                               spacing: 8,
@@ -828,8 +874,10 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
                                     Uri.parse(url).pathSegments.last;
                                 return ActionChip(
                                   onPressed: () => _openAttachment(url),
-                                  avatar: const Icon(Icons.attach_file,
-                                      size: 18),
+                                  avatar: const Icon(
+                                    Icons.attach_file,
+                                    size: 18,
+                                  ),
                                   label: Text(
                                     fileName,
                                     overflow: TextOverflow.ellipsis,
@@ -842,7 +890,6 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
                       const Divider(),
                       const SizedBox(height: 12),
 
-                      // Decision section
                       const Text(
                         'Admin decision',
                         style: TextStyle(
@@ -919,15 +966,15 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
               ),
             ),
 
-            // Buttons
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 18, vertical: 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
+                    onPressed:
+                        _saving ? null : () => Navigator.pop(context),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 8),
@@ -940,7 +987,8 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                                  AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
                             ),
                           )
                         : const Icon(Icons.check),

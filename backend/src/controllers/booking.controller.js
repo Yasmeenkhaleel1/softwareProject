@@ -14,6 +14,9 @@ import { sendNotificationToUser } from "../services/notificationSender.js";
 import { sendFCM } from "../utils/sendFCM.js";
 import User from "../models/user/user.model.js";
 
+import Stripe from "stripe";
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
 // Days considered non-blocking (old bookings)
 const NON_BLOCKING = new Set(["CANCELED", "REFUNDED"]);
 
@@ -443,6 +446,78 @@ export async function addCustomerReview(req, res) {
     });
   } catch (err) {
     console.error("addCustomerReview error", err);
+    return res
+      .status(500)
+      .json({ message: "Server error", error: err.message });
+  }
+}
+
+/**
+ * 🎯 POST /api/customer/bookings/:id/cancel
+ * الكستمر يلغي حجزه (فقط لو PENDING)
+ */
+export async function cancelCustomerBooking(req, res) {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // 🔐 تأكد إنه صاحب الحجز
+    if (String(booking.customer) !== String(userId)) {
+      return res
+        .status(403)
+        .json({ message: "You can cancel only your own bookings" });
+    }
+
+    // ✅ فقط الحجوزات PENDING
+    if (booking.status !== "PENDING") {
+      return res.status(400).json({
+        message: "Only PENDING bookings can be canceled by the customer",
+      });
+    }
+
+    // 🔹 نتحقق من أي Payment مربوط بالحجز
+    const payment = await Payment.findOne({ booking: booking._id });
+
+    if (payment && payment.status === "AUTHORIZED") {
+      // 💳 إلغاء الـ Authorization في Stripe
+      await stripe.paymentIntents.cancel(payment.txnId);
+
+      payment.status = "CANCELED_BY_CUSTOMER";
+      payment.timeline = payment.timeline || [];
+      payment.timeline.push({
+        action: "CANCELED_BY_CUSTOMER_BEFORE_CONFIRM",
+        by: "CUSTOMER",
+        at: new Date(),
+      });
+      await payment.save();
+
+      // نحدّث نسخة الدفع داخل الحجز نفسه
+      booking.payment.status = "REFUNDED"; // أو "PENDING" حسب ما تحبي تسمّيها
+    }
+
+    booking.status = "CANCELED";
+    booking.timeline = booking.timeline || [];
+    booking.timeline.push({
+      by: "CUSTOMER",
+      action: "CANCELED",
+      at: new Date(),
+      meta: { reason: "CANCELLED_BEFORE_ACCEPT" },
+    });
+
+    await booking.save();
+
+    return res.json({
+      success: true,
+      message: "Booking canceled successfully",
+      booking,
+    });
+  } catch (err) {
+    console.error("cancelCustomerBooking error", err);
     return res
       .status(500)
       .json({ message: "Server error", error: err.message });
