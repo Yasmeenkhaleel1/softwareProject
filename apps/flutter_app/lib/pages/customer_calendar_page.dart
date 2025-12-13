@@ -278,180 +278,223 @@ class _CustomerCalendarPageState extends State<CustomerCalendarPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _primary, // 🔹 فيروزي
-        elevation: 0,
-        title: const Text(
-          "My Calendar",
-          style: TextStyle(fontWeight: FontWeight.w600),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 900;
+
+        return Scaffold(
+          backgroundColor: _bg,
+          appBar: AppBar(
+            backgroundColor: _primary, // 🔹 فيروزي
+            elevation: 0,
+            title: const Text(
+              "My Calendar",
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                tooltip: "Refresh",
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadBookings,
+              ),
+            ],
+          ),
+          body: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+                  ? _buildErrorState()
+                  : isWide
+                      ? _buildWideLayout()
+                      : _buildMobileLayout(),
+        );
+      },
+    );
+  }
+
+  // ---------- Error Widget ----------
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline,
+                size: 40, color: Colors.redAccent),
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ],
         ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: "Refresh",
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadBookings,
+      ),
+    );
+  }
+
+  // ---------- Mobile Layout ----------
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: _buildCalendarCard(),
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: _buildBookingsTitle(),
+        ),
+        Expanded(
+          child: _buildBookingListForSelectedDay(),
+        ),
+      ],
+    );
+  }
+
+  // ---------- Wide / Web Layout ----------
+  Widget _buildWideLayout() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        children: [
+          // الكالندر على اليسار
+          Expanded(
+            flex: 4,
+            child: _buildCalendarCard(),
+          ),
+          const SizedBox(width: 18),
+          // البوكنغ لست على اليمين
+          Expanded(
+            flex: 5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildBookingsTitle(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: _buildBookingListForSelectedDay(),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.error_outline,
-                            size: 40, color: Colors.redAccent),
-                        const SizedBox(height: 12),
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ],
+    );
+  }
+
+  // ---------- Calendar Card ----------
+  Widget _buildCalendarCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+        child: Column(
+          children: [
+            TableCalendar(
+              firstDay: DateTime.utc(2020, 1, 1),
+              lastDay: DateTime.utc(2100, 12, 31),
+              focusedDay: _focusedDay,
+              calendarFormat: CalendarFormat.month,
+              startingDayOfWeek: StartingDayOfWeek.monday,
+              selectedDayPredicate: (day) =>
+                  isSameDay(_selectedDay, day),
+              eventLoader: (day) => _bookingsForDay(day),
+              onDaySelected: (selectedDay, focusedDay) async {
+                setState(() {
+                  _selectedDay = selectedDay;
+                  _focusedDay = focusedDay;
+                });
+              },
+              onPageChanged: (focusedDay) {
+                _focusedDay = focusedDay;
+                _loadBookings();
+              },
+              calendarStyle: const CalendarStyle(
+                markerDecoration: BoxDecoration(
+                  color: _primary,
+                  shape: BoxShape.circle,
+                ),
+                todayDecoration: BoxDecoration(
+                  color: Color(0xFFEBF6F8),
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: BoxDecoration(
+                  color: _primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            // ---------- Status Filter ----------
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.filter_list,
+                      size: 18, color: _primary),
+                  const SizedBox(width: 6),
+                  const Text(
+                    "Filter by status:",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: _primary,
                     ),
                   ),
-                )
-              : Column(
-                  children: [
-                    const SizedBox(height: 8),
-
-                    // ---------- Calendar Card ----------
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Card(
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                          child: Column(
-                            children: [
-                              TableCalendar(
-                                firstDay: DateTime.utc(2020, 1, 1),
-                                lastDay: DateTime.utc(2100, 12, 31),
-                                focusedDay: _focusedDay,
-                                calendarFormat: CalendarFormat.month,
-                                startingDayOfWeek: StartingDayOfWeek.monday,
-                                selectedDayPredicate: (day) =>
-                                    isSameDay(_selectedDay, day),
-                                eventLoader: (day) => _bookingsForDay(day),
-                                onDaySelected:
-                                    (selectedDay, focusedDay) async {
-                                  setState(() {
-                                    _selectedDay = selectedDay;
-                                    _focusedDay = focusedDay;
-                                  });
-                                },
-                                onPageChanged: (focusedDay) {
-                                  _focusedDay = focusedDay;
-                                  _loadBookings();
-                                },
-                                calendarStyle: const CalendarStyle(
-                                  markerDecoration: BoxDecoration(
-                                    color: _primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  todayDecoration: BoxDecoration(
-                                    color: Color(0xFFEBF6F8),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  selectedDecoration: BoxDecoration(
-                                    color: _primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                headerStyle: const HeaderStyle(
-                                  formatButtonVisible: false,
-                                  titleCentered: true,
-                                ),
-                              ),
-
-                              const SizedBox(height: 4),
-
-                              // ---------- Status Filter ----------
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.filter_list,
-                                        size: 18, color: _primary),
-                                    const SizedBox(width: 6),
-                                    const Text(
-                                      "Filter by status:",
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: _primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        child: Row(
-                                          children: [
-                                            _buildFilterChip("All", "ALL"),
-                                            _buildFilterChip(
-                                                "Pending", "PENDING"),
-                                            _buildFilterChip(
-                                                "Confirmed", "CONFIRMED"),
-                                            _buildFilterChip(
-                                                "In progress", "IN_PROGRESS"),
-                                            _buildFilterChip(
-                                                "Completed", "COMPLETED"),
-                                            _buildFilterChip(
-                                                "Canceled", "CANCELED"),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    // ---------- Title for list ----------
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          const Icon(Icons.event_note,
-                              size: 18, color: _primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            "Bookings on "
-                            "${_selectedDay.year}-${_selectedDay.month.toString().padLeft(2, '0')}-${_selectedDay.day.toString().padLeft(2, '0')}",
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _primary,
-                            ),
-                          ),
+                          _buildFilterChip("All", "ALL"),
+                          _buildFilterChip("Pending", "PENDING"),
+                          _buildFilterChip("Confirmed", "CONFIRMED"),
+                          _buildFilterChip("In progress", "IN_PROGRESS"),
+                          _buildFilterChip("Completed", "COMPLETED"),
+                          _buildFilterChip("Canceled", "CANCELED"),
                         ],
                       ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 
-                    // ---------- Booking list ----------
-                    Expanded(
-                      child: _buildBookingListForSelectedDay(),
-                    ),
-                  ],
-                ),
+  // ---------- Title for bookings ----------
+  Widget _buildBookingsTitle() {
+    return Row(
+      children: [
+        const Icon(Icons.event_note, size: 18, color: _primary),
+        const SizedBox(width: 6),
+        Text(
+          "Bookings on "
+          "${_selectedDay.year}-${_selectedDay.month.toString().padLeft(2, '0')}-${_selectedDay.day.toString().padLeft(2, '0')}",
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: _primary,
+          ),
+        ),
+      ],
     );
   }
 
@@ -479,6 +522,7 @@ class _CustomerCalendarPageState extends State<CustomerCalendarPage> {
     );
   }
 
+  // ---------- Booking list ----------
   Widget _buildBookingListForSelectedDay() {
     final bookings = _bookingsForDay(_selectedDay);
 

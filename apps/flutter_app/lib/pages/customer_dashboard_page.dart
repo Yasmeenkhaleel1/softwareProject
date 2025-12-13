@@ -8,13 +8,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'customer_profile_page.dart';
 import 'ExpertDetailPage.dart';
 import 'customer_notifications_page.dart';
-import 'customer_messages_page.dart';
+
 import 'customer_help_page.dart';
 import 'customer_calendar_page.dart';
 import 'chat/conversations_page.dart'; // ✅ صفحة المسجات الجديدة
 import 'customer_experts_page.dart'; // 👈 صفحة My Experts اللي عملناها
 import 'package:flutter_app/widgets/ai_assistant_panel.dart';
-import '../config/api_config.dart'; 
+import '../config/api_config.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key});
@@ -35,7 +35,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   static const Color accentColor = Color(0xFF285E6E);
   static String get baseUrl => ApiConfig.baseUrl;
 
-
   late AnimationController _hoverController;
 
   List<dynamic> experts = [];
@@ -50,6 +49,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   List<Map<String, dynamic>> _searchResults = [];
 
   bool _showAiAssistant = false;
+
+  // 🔻 جديد: اندكس الشريط السفلي
+  int _bottomNavIndex = 0;
 
   final List<String> _categories = const [
     "Design",
@@ -287,6 +289,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         child: _buildTopBar(userName, isMobile),
       ),
 
+      // ✅ شريط سفلي مثل إنستغرام (للموبايل فقط)
+      bottomNavigationBar: isMobile ? _buildBottomNavBar() : null,
+
       // 🟢 زر الشات بوت – يفتح/يغلق الـ Panel
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: accentColor,
@@ -331,6 +336,89 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             ),
         ],
       ),
+    );
+  }
+
+  // ========================= BOTTOM NAV BAR =========================
+
+  Widget _buildBottomNavBar() {
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      currentIndex: _bottomNavIndex,
+      backgroundColor: Colors.white,
+      selectedItemColor: accentColor,
+      unselectedItemColor: Colors.grey,
+      showUnselectedLabels: true,
+      onTap: (index) {
+        setState(() => _bottomNavIndex = index);
+
+        switch (index) {
+          case 0:
+            // Home – لا نعمل شيء، أنتِ أصلاً على صفحة الهوم
+            break;
+
+          case 1:
+            // 📅 My Bookings – placeholder لصفحة قادمة
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("My Bookings page will be available soon."),
+              ),
+            );
+            break;
+
+          case 2:
+            // 💬 Messages
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ConversationsPage(),
+              ),
+            );
+            break;
+
+          case 3:
+            // 👥 My Experts
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CustomerExpertsPage(),
+              ),
+            );
+            break;
+
+          case 4:
+            // ❓ Help & Support
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CustomerHelpPage(),
+              ),
+            );
+            break;
+        }
+      },
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_outlined),
+          label: 'Home',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.calendar_today_outlined),
+          label: 'My Bookings',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.chat_bubble_outline),
+          label: 'Messages',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.people_alt_outlined),
+          label: 'My Experts',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.help_outline),
+          label: 'Help',
+        ),
+      ],
     );
   }
 
@@ -417,51 +505,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             );
           },
         ),
-        PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, color: accentColor),
-          onSelected: (value) {
-            switch (value) {
-              case 'messages':
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ConversationsPage(),
-                  ),
-                );
-                break;
-              case 'experts':
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CustomerExpertsPage(),
-                  ),
-                );
-                break;
-              case 'help':
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CustomerHelpPage(),
-                  ),
-                );
-                break;
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
-              value: 'messages',
-              child: Text("Messages"),
-            ),
-            PopupMenuItem(
-              value: 'experts',
-              child: Text("My Experts"),
-            ),
-            PopupMenuItem(
-              value: 'help',
-              child: Text("Help & Support"),
-            ),
-          ],
-        ),
+        
       ],
     );
   }
@@ -1142,9 +1186,9 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     final expertName =
         (expert['name'] ?? profile['name'] ?? 'Expert').toString();
 
-    final expertImg =
-        (expert['profileImageUrl'] ?? profile['profileImageUrl'] ?? '')
-            .toString();
+   final String imageUrl =
+    ApiConfig.fixAssetUrl(expert['profileImageUrl'] as String?);
+            
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -1170,9 +1214,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             CircleAvatar(
               radius: 26,
               backgroundColor: primaryColor.withOpacity(0.1),
-              backgroundImage:
-                  expertImg.isNotEmpty ? NetworkImage(expertImg) : null,
-              child: expertImg.isEmpty
+              backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+              child: imageUrl.isEmpty
                   ? const Icon(Icons.person, color: primaryColor)
                   : null,
             ),
@@ -1378,7 +1421,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         (expert["specialization"] ?? expert["specialty"] ?? "N/A").toString();
     final ratingVal =
         (expert["ratingAvg"] ?? expert["rating"] ?? 0).toString();
-    final profileImageUrl = (expert["profileImageUrl"] ?? "").toString();
+    final String profileImageUrl =
+    ApiConfig.fixAssetUrl(expert['profileImageUrl'] as String?);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -1426,9 +1470,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 child: CircleAvatar(
                   radius: 26,
                   backgroundColor: Colors.white,
-                  backgroundImage: profileImageUrl.isNotEmpty
-                      ? NetworkImage(profileImageUrl)
-                      : null,
+                 backgroundImage: profileImageUrl.isNotEmpty ? NetworkImage(profileImageUrl) : null,
+                      
                   child: profileImageUrl.isEmpty
                       ? const Icon(Icons.person,
                           size: 28, color: Color(0xFF62C6D9))
