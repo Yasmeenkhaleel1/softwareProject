@@ -10,8 +10,6 @@ import '/api/api_service.dart';
 import '../config/api_config.dart';
 
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 
 /*───────────────────────────────────────────────────────────────
   CARD VALIDATION HELPERS
@@ -82,27 +80,27 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
   bool loading = true;
 
   String _resolveBaseUrl() {
-  return ApiConfig.baseUrl;
-}
-
-  // ✅ إصلاح روابط الصور للويب
- String _fixImageUrl(String url) {
-  if (url.isEmpty) return url;
-
-  // 🌐 Web → استخدم 127.0.0.1 بدل localhost
-  if (kIsWeb && url.contains("localhost")) {
-    return url.replaceAll("localhost", "127.0.0.1");
+    return ApiConfig.baseUrl;
   }
 
-  // 📱 Android Emulator → استخدم 10.0.2.2
-  if (!kIsWeb &&
-      defaultTargetPlatform == TargetPlatform.android &&
-      url.contains("localhost")) {
-    return url.replaceAll("localhost", "10.0.2.2");
-  }
+  // ✅ إصلاح روابط الصور للويب والموبايل
+  String _fixImageUrl(String url) {
+    if (url.isEmpty) return url;
 
-  return url;
-}
+    // 🌐 Web → استخدم 127.0.0.1 بدل localhost
+    if (kIsWeb && url.contains("localhost")) {
+      return url.replaceAll("localhost", "127.0.0.1");
+    }
+
+    // 📱 Android Emulator → استخدم 10.0.2.2
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        url.contains("localhost")) {
+      return url.replaceAll("localhost", "10.0.2.2");
+    }
+
+    return url;
+  }
 
   Future<String> _token() async {
     final t = await ApiService.getToken();
@@ -187,29 +185,73 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
   Widget build(BuildContext context) {
     final fallbackName = (widget.expert["name"] ?? "Expert").toString();
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F7FB),
       appBar: AppBar(
-        title: Text(fallbackName),
         backgroundColor: const Color(0xFF62C6D9),
+        elevation: 0,
+        title: Text(
+          fallbackName,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _load,
+            tooltip: "Refresh",
+          ),
         ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _header(),
-                  const SizedBox(height: 20),
-                  _services(),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final bool isWide = constraints.maxWidth >= 900;
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xFFE7F5F8),
+                            Color(0xFFF7FBFD),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints:
+                              const BoxConstraints(maxWidth: 1100),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isWide ? 24 : 16,
+                              vertical: 20,
+                            ),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.stretch,
+                              children: [
+                                _header(),
+                                const SizedBox(height: 24),
+                                _services(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
     );
   }
 
+  // ───────────────────── Header (Hero) ─────────────────────
   Widget _header() {
     final name =
         (profile?["name"] ?? widget.expert["name"] ?? "Expert").toString();
@@ -222,60 +264,110 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
 
     final fixedBg = _fixImageUrl(bg);
 
-    return Stack(
-      children: [
-        Container(
-          height: 160,
-          decoration: BoxDecoration(
-            color: Colors.teal.shade200,
-            image: fixedBg.isNotEmpty
-                ? DecorationImage(
-                    image: NetworkImage(fixedBg),
-                    fit: BoxFit.cover,
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(12),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-          child: fixedBg.isNotEmpty
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                    child: Container(color: Colors.black26.withOpacity(0.2)),
-                  ),
-                )
-              : null,
-        ),
-        Positioned(
-          left: 12,
-          bottom: 12,
-          child: Row(children: [
-            const CircleAvatar(
-              radius: 26,
-              backgroundColor: Color(0xFF62C6D9),
-              child: Icon(Icons.person, color: Colors.white),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          children: [
+            Container(
+              height: 190,
+              decoration: BoxDecoration(
+                color: const Color(0xFF285E6E),
+                image: fixedBg.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(fixedBg),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
             ),
-            const SizedBox(width: 12),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+            if (fixedBg.isNotEmpty)
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                  child: Container(
+                    color: Colors.black.withOpacity(0.35),
+                  ),
                 ),
               ),
-              Text(
-                specialty,
-                style: const TextStyle(color: Colors.white70),
+            Container(
+              height: 190,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 18,
               ),
-            ])
-          ]),
-        )
-      ],
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 34,
+                    backgroundColor: const Color(0xFF62C6D9),
+                    backgroundImage:
+                        fixedBg.isNotEmpty ? NetworkImage(fixedBg) : null,
+                    child: fixedBg.isEmpty
+                        ? const Icon(Icons.person,
+                            color: Colors.white, size: 32)
+                        : null,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          specialty,
+                          style: const TextStyle(
+                            color: Color(0xFFE0F7FA),
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: const [
+                            Icon(Icons.verified,
+                                size: 18, color: Colors.lightGreenAccent),
+                            SizedBox(width: 6),
+                            Text(
+                              "Trusted expert on Lost Treasures",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
+  // ───────────────────── Services List ─────────────────────
   Widget _services() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +379,7 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Color(0xFF0F172A),
             ),
           ),
         ),
@@ -296,7 +388,9 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
             "No published services yet.",
             style: TextStyle(color: Colors.grey),
           ),
-        ...services.map((s) => _serviceCard(s as Map<String, dynamic>)).toList(),
+        ...services
+            .map((s) => _serviceCard(s as Map<String, dynamic>))
+            .toList(),
       ],
     );
   }
@@ -313,161 +407,244 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
       cover = s["images"][0].toString();
     }
     final imgUrl = _fixImageUrl(cover);
+    final cleanUrl = imgUrl.trim();
+    final isValidUrl =
+        cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://');
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 0.6,
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(10),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: () {
-            final cleanUrl = imgUrl.trim();
-            final isValidUrl =
-                cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://');
-
-            if (isValidUrl) {
-              return Image.network(
-                cleanUrl,
-                width: 65,
-                height: 65,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  width: 65,
-                  height: 65,
-                  color: Colors.grey.shade200,
-                  child: const Icon(Icons.broken_image, color: Colors.grey),
-                ),
-              );
-            } else {
-              return Container(
-                width: 65,
-                height: 65,
-                color: Colors.grey.shade200,
-                child: const Icon(Icons.image_not_supported, color: Colors.grey),
-              );
-            }
-          }(),
-        ),
-        title: GestureDetector(
-          onTap: () => _showServiceDetails(context, s),
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF285E6E),
-              decoration: TextDecoration.underline,
-            ),
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(10.0),
+        child: Row(
           children: [
-            Text(category, style: const TextStyle(color: Colors.teal)),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.attach_money, size: 15, color: Colors.grey),
-                Text(
-                  "$price $currency",
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+            // Thumbnail
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: isValidUrl
+                  ? Image.network(
+                      cleanUrl,
+                      width: 72,
+                      height: 72,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: 72,
+                        height: 72,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.broken_image,
+                            color: Colors.grey),
+                      ),
+                    )
+                  : Container(
+                      width: 72,
+                      height: 72,
+                      color: Colors.grey.shade200,
+                      child: const Icon(Icons.image_not_supported,
+                          color: Colors.grey),
+                    ),
+            ),
+            const SizedBox(width: 12),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: Color(0xFF285E6E),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    category,
+                    style: const TextStyle(
+                      color: Colors.teal,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.attach_money,
+                          size: 16, color: Colors.grey),
+                      Text(
+                        "$price $currency",
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.black87),
+                      ),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.timer,
+                          size: 16, color: Colors.grey),
+                      Text(
+                        "$duration min",
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.black87),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // "Details" tab-style button
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        backgroundColor:
+                            const Color(0xFFE7F5F8), // تب شكلها Tab
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      onPressed: () => _showServiceDetails(context, s),
+                      icon: const Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Color(0xFF285E6E),
+                      ),
+                      label: const Text(
+                        "Details",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF285E6E),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Book button
+            TextButton(
+              child: const Text(
+                "Book",
+                style: TextStyle(
+                  color: Color(0xFF62C6D9),
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(width: 10),
-                const Icon(Icons.timer, size: 15, color: Colors.grey),
-                Text(
-                  "$duration min",
-                  style: const TextStyle(fontSize: 13, color: Colors.black87),
-                ),
-              ],
+              ),
+              onPressed: () {
+                final expertId = _bookingExpertId();
+                final serviceId = (s["_id"] ?? s["id"])?.toString();
+                if (expertId == null || serviceId == null) return;
+
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(18)),
+                  ),
+                  builder: (_) => _SlotPickerSheet(
+                    expertId: expertId,
+                    durationMinutes: duration,
+                    service: s,
+                    baseUrl: baseUrl,
+                    price: price,
+                    currency: currency,
+                    getCustomerId: _customerId,
+                  ),
+                );
+              },
             ),
           ],
-        ),
-        trailing: TextButton(
-          child: const Text(
-            "Book",
-            style: TextStyle(
-              color: Color(0xFF62C6D9),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          onPressed: () {
-            final expertId = _bookingExpertId();
-            final serviceId = (s["_id"] ?? s["id"])?.toString();
-            if (expertId == null || serviceId == null) return;
-
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-              ),
-              builder: (_) => _SlotPickerSheet(
-                expertId: expertId,
-                durationMinutes: duration,
-                service: s,
-                baseUrl: baseUrl,
-                price: price,
-                currency: currency,
-                getCustomerId: _customerId,
-              ),
-            );
-          },
         ),
       ),
     );
   }
 
-  void _showServiceDetails(BuildContext context, Map<String, dynamic> service) {
+  // ───────────────────── Service Details Dialog ─────────────────────
+  void _showServiceDetails(
+      BuildContext context, Map<String, dynamic> service) {
     final title = (service["title"] ?? "Untitled").toString();
     final category = (service["category"] ?? "General").toString();
     final price = int.tryParse("${service["price"] ?? 0}") ?? 0;
     final currency = (service["currency"] ?? "USD").toString();
-    final duration = int.tryParse("${service["durationMinutes"] ?? 60}") ?? 60;
+    final duration =
+        int.tryParse("${service["durationMinutes"] ?? 60}") ?? 60;
     final desc =
         (service["description"] ?? "No description provided.").toString();
 
-    String imageUrl = "";
-    if (service["images"] != null &&
-        service["images"] is List &&
-        service["images"].isNotEmpty) {
-      imageUrl = _fixImageUrl(service["images"][0].toString().trim());
+    // 🖼️ نجمع كل الصور من الـ images[]
+    final List<String> gallery = [];
+    final rawImages = service["images"];
+    if (rawImages is List) {
+      for (final img in rawImages) {
+        final u = _fixImageUrl(img.toString().trim());
+        if (u.isNotEmpty) gallery.add(u);
+      }
     }
 
     showDialog(
       context: context,
       builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         child: Container(
-          width: 400,
-          padding: const EdgeInsets.all(16),
+          width: 460,
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
           ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (imageUrl.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      imageUrl,
-                      height: 180,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        height: 180,
-                        color: Colors.grey.shade200,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image,
-                            size: 50, color: Colors.grey),
-                      ),
+                // Gallery
+                if (gallery.isNotEmpty)
+                  SizedBox(
+                    height: 210,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: gallery.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        final u = gallery[index];
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            u,
+                            height: 210,
+                            width: 280,
+                            fit: BoxFit.cover,
+                            errorBuilder:
+                                (context, error, stackTrace) =>
+                                    Container(
+                              height: 210,
+                              width: 280,
+                              color: Colors.grey.shade200,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image,
+                                  size: 50, color: Colors.grey),
+                            ),
+                          ),
+                        );
+                      },
                     ),
+                  )
+                else
+                  Container(
+                    height: 140,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF4F7FB),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.image_outlined,
+                        size: 40, color: Colors.grey),
                   ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
                   title,
                   style: const TextStyle(
@@ -481,21 +658,23 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
                   category,
                   style: const TextStyle(color: Colors.teal, fontSize: 15),
                 ),
-                const Divider(height: 20),
+                const Divider(height: 24),
                 Row(
                   children: [
-                    const Icon(Icons.attach_money, size: 18, color: Colors.grey),
+                    const Icon(Icons.attach_money,
+                        size: 18, color: Colors.grey),
                     Text("$price $currency",
                         style: const TextStyle(fontSize: 15)),
-                    const SizedBox(width: 15),
-                    const Icon(Icons.timer, size: 18, color: Colors.grey),
+                    const SizedBox(width: 16),
+                    const Icon(Icons.timer,
+                        size: 18, color: Colors.grey),
                     Text("$duration min",
                         style: const TextStyle(fontSize: 15)),
                   ],
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 18),
                 const Text(
-                  "Description",
+                  "About this service",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -505,8 +684,11 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
                 const SizedBox(height: 6),
                 Text(
                   desc,
-                  style:
-                      const TextStyle(fontSize: 14, color: Colors.black87),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                    height: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Align(
@@ -642,7 +824,8 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
       return;
     }
 
-    final serviceId = (widget.service["_id"] ?? widget.service["id"])?.toString();
+    final serviceId =
+        (widget.service["_id"] ?? widget.service["id"])?.toString();
     if (serviceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Service id missing.")),
@@ -854,7 +1037,8 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
                   final hasSlots = slotsList.isNotEmpty;
 
                   final dt = DateTime.tryParse(dateStr);
-                  final dayNum = dt?.day.toString().padLeft(2, '0') ?? "--";
+                  final dayNum =
+                      dt?.day.toString().padLeft(2, '0') ?? "--";
                   final weekday = dt != null
                       ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
                           [dt.weekday % 7]
@@ -905,7 +1089,8 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: hasSlots ? Colors.black87 : Colors.grey,
+                              color:
+                                  hasSlots ? Colors.black87 : Colors.grey,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -913,8 +1098,9 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
                             height: 4,
                             width: 26,
                             decoration: BoxDecoration(
-                              color:
-                                  hasSlots ? baseColor : Colors.grey.shade400,
+                              color: hasSlots
+                                  ? baseColor
+                                  : Colors.grey.shade400,
                               borderRadius: BorderRadius.circular(999),
                             ),
                           ),
@@ -957,7 +1143,8 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
                               "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}";
 
                           return AnimatedScale(
-                            duration: const Duration(milliseconds: 120),
+                            duration:
+                                const Duration(milliseconds: 120),
                             scale: available ? 1.0 : 0.97,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
@@ -969,7 +1156,8 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
                                     ? const Color(0xFF62C6D9)
                                     : Colors.grey,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius:
+                                      BorderRadius.circular(10),
                                   side: BorderSide(
                                     color: available
                                         ? const Color(0xFF62C6D9)
@@ -1023,7 +1211,7 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
 }
 
 /*───────────────────────────────────────────────────────────────
-  PAYMENT SIDE SHEET
+  PAYMENT SIDE SHEET  (نفس اللوجيك، بس ما عدلناه)
 ───────────────────────────────────────────────────────────────*/
 class _PaymentSideSheet extends StatefulWidget {
   final String baseUrl;
@@ -1068,125 +1256,125 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
   }
 
   Future<void> _submit() async {
-  final customerId = await widget.getCustomerId();
+    final customerId = await widget.getCustomerId();
 
-  if (customerId == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Please login to complete payment."),
-      ),
-    );
-    return;
-  }
-
-  setState(() => _submitting = true);
-
-  try {
-    // 1) إنشاء الحجز بحالة PENDING
-    final startStr = widget.slot['startAt'] as String;
-    final endStr   = widget.slot['endAt']   as String;
-
-    final bookingRes = await ApiService.createPublicBooking(
-      expertId: widget.expertId,
-      serviceId: widget.serviceId,
-      customerId: customerId,
-      startAtIso: DateTime.parse(startStr).toUtc().toIso8601String(),
-      endAtIso:   DateTime.parse(endStr).toUtc().toIso8601String(),
-      timezone: "Asia/Hebron",
-      note: "",
-    );
-
-    final booking   = bookingRes["booking"];
-    final bookingId = booking["_id"];
-
-    // 2) إنشاء PaymentIntent في الباك إند
-    final intentRes = await ApiService.createStripeIntent(
-      amount:        widget.price.toDouble(),
-      currency:      widget.currency,
-      customerId:    customerId,
-      expertProfileId: widget.expertId,
-      serviceId:     widget.serviceId,
-      bookingId:     bookingId,
-    );
-
-    final clientSecret = intentRes["clientSecret"];
-    final paymentId    = intentRes["paymentId"];
-
-    if (clientSecret == null || paymentId == null) {
-      throw Exception("Missing clientSecret or paymentId from backend.");
+    if (customerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please login to complete payment."),
+        ),
+      );
+      return;
     }
 
-    // 3) تهيئة الـ PaymentSheet (تشتغل ويب + موبايل)
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Lost Treasures',
-        style: ThemeMode.light,
-      ),
-    );
+    setState(() => _submitting = true);
 
-    // 4) عرض الـ PaymentSheet (واجهة الكرت)
-    await Stripe.instance.presentPaymentSheet();
+    try {
+      // 1) إنشاء الحجز بحالة PENDING
+      final startStr = widget.slot['startAt'] as String;
+      final endStr = widget.slot['endAt'] as String;
 
-   // 5) جلب الـ PaymentIntent بعد النجاح للحصول على الـ id / payment_method
-    final paymentIntent =
-        await Stripe.instance.retrievePaymentIntent(clientSecret);
+      final bookingRes = await ApiService.createPublicBooking(
+        expertId: widget.expertId,
+        serviceId: widget.serviceId,
+        customerId: customerId,
+        startAtIso: DateTime.parse(startStr).toUtc().toIso8601String(),
+        endAtIso: DateTime.parse(endStr).toUtc().toIso8601String(),
+        timezone: "Asia/Hebron",
+        note: "",
+      );
 
-    final paymentIntentId = paymentIntent.id;
-    final paymentMethodId = paymentIntent.paymentMethodId;
+      final booking = bookingRes["booking"];
+      final bookingId = booking["_id"];
 
-    if (paymentMethodId == null) {
-      throw Exception("Missing payment method from Stripe PaymentIntent");
-    }
+      // 2) إنشاء PaymentIntent في الباك إند
+      final intentRes = await ApiService.createStripeIntent(
+        amount: widget.price.toDouble(),
+        currency: widget.currency,
+        customerId: customerId,
+        expertProfileId: widget.expertId,
+        serviceId: widget.serviceId,
+        bookingId: bookingId,
+      );
 
-    // 6) تأكيد الدفع في الباك إند (تحديث Payment في الداتابيس)
-    await ApiService.confirmStripeIntent(
-      paymentId:       paymentId,
-      paymentIntentId: paymentIntentId,
-      paymentMethodId: paymentMethodId, // ✅ الآن String مش String?
-    );
+      final clientSecret = intentRes["clientSecret"];
+      final paymentId = intentRes["paymentId"];
 
-    if (!mounted) return;
+      if (clientSecret == null || paymentId == null) {
+        throw Exception("Missing clientSecret or paymentId from backend.");
+      }
 
-    // إغلاق Panel الدفع
-    Navigator.of(context).pop();
-
-    // Dialog نجاح
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text(
-          "Booking Requested",
-          style: TextStyle(fontWeight: FontWeight.bold),
+      // 3) تهيئة الـ PaymentSheet
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: clientSecret,
+          merchantDisplayName: 'Lost Treasures',
+          style: ThemeMode.light,
         ),
-        content: const Text(
-          "Your booking has been created successfully.\n"
-          "Please wait for the expert's approval.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text("OK"),
+      );
+
+      // 4) عرض الـ PaymentSheet
+      await Stripe.instance.presentPaymentSheet();
+
+      // 5) جلب الـ PaymentIntent بعد النجاح
+      final paymentIntent =
+          await Stripe.instance.retrievePaymentIntent(clientSecret);
+
+      final paymentIntentId = paymentIntent.id;
+      final paymentMethodId = paymentIntent.paymentMethodId;
+
+      if (paymentMethodId == null) {
+        throw Exception("Missing payment method from Stripe PaymentIntent");
+      }
+
+      // 6) تأكيد الدفع في الباك إند
+      await ApiService.confirmStripeIntent(
+        paymentId: paymentId,
+        paymentIntentId: paymentIntentId,
+        paymentMethodId: paymentMethodId,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text(
+            "Booking Requested",
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
-        ],
-      ),
-    );
-  } on StripeException catch (e) {
-    // خطأ من Stripe (إلغاء من المستخدم أو مشكلة في الكرت)
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Payment cancelled: ${e.error.localizedMessage}")),
-    );
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Payment failed: $e")),
-    );
-  } finally {
-    if (mounted) setState(() => _submitting = false);
+          content: const Text(
+            "Your booking has been created successfully.\n"
+            "Please wait for the expert's approval.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+    } on StripeException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                "Payment cancelled: ${e.error.localizedMessage}")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Payment failed: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -1206,7 +1394,8 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
       children: [
         // Header
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: const BoxDecoration(
             border: Border(
               bottom: BorderSide(color: Color(0xFFE0E0E0)),
@@ -1268,8 +1457,8 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
                           const SizedBox(width: 6),
                           Text(
                             dateLabel,
-                            style:
-                                const TextStyle(color: Colors.black87),
+                            style: const TextStyle(
+                                color: Colors.black87),
                           ),
                         ],
                       ),
@@ -1281,8 +1470,8 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
                           const SizedBox(width: 6),
                           Text(
                             timeLabel,
-                            style:
-                                const TextStyle(color: Colors.black87),
+                            style: const TextStyle(
+                                color: Colors.black87),
                           ),
                         ],
                       ),
@@ -1322,37 +1511,38 @@ class _PaymentSideSheetState extends State<_PaymentSideSheet> {
                 ),
                 const SizedBox(height: 16),
 
-               ElevatedButton.icon(
-  icon: const Icon(Icons.credit_card),
-  label: Text(
-    _submitting
-        ? "Processing..."
-        : (kIsWeb ? "Payments not available on Web yet" : "Pay with Stripe"),
-    style: const TextStyle(fontWeight: FontWeight.bold),
-  ),
-  style: ElevatedButton.styleFrom(
-    backgroundColor: const Color(0xFF62C6D9),
-    foregroundColor: Colors.white,
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(10),
-    ),
-  ),
-  onPressed: _submitting
-      ? null
-      : (kIsWeb
-          ? () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    "Online payment is not supported on Web yet. Please use the mobile app.",
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.credit_card),
+                  label: Text(
+                    _submitting
+                        ? "Processing..."
+                        : (kIsWeb
+                            ? "Payments not available on Web yet"
+                            : "Pay with Stripe"),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF62C6D9),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: _submitting
+                      ? null
+                      : (kIsWeb
+                          ? () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "Online payment is not supported on Web yet. Please use the mobile app.",
+                                  ),
+                                ),
+                              );
+                            }
+                          : _submit),
                 ),
-              );
-            }
-          : _submit),
-),
-
               ],
             ),
           ),
