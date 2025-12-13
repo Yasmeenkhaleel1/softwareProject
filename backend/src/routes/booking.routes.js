@@ -4,6 +4,7 @@ import {
   createBookingPublic,
   getCustomerBookings,
   addCustomerReview,
+  cancelCustomerBooking,
 } from "../controllers/booking.controller.js";
 import { auth } from "../middleware/auth.js";
 
@@ -27,4 +28,10 @@ bookingRouter.post(
   addCustomerReview
 );
 
+// ✅ إلغاء حجز من قبل العميل (فقط لو PENDING)
+bookingRouter.post(
+  "/customer/bookings/:id/cancel",
+  auth(),
+  cancelCustomerBooking
+);
 export default bookingRouter;

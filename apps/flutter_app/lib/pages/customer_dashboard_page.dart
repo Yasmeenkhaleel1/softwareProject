@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'customer_profile_page.dart';
 import 'ExpertDetailPage.dart';
 import 'customer_notifications_page.dart';
-
+import 'customer_my_bookings_page.dart';
 import 'customer_help_page.dart';
 import 'customer_calendar_page.dart';
 import 'chat/conversations_page.dart'; // ✅ صفحة المسجات الجديدة
@@ -358,13 +358,14 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             break;
 
           case 1:
-            // 📅 My Bookings – placeholder لصفحة قادمة
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("My Bookings page will be available soon."),
-              ),
-            );
-            break;
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const CustomerMyBookingsPage(),
+    ),
+  );
+  break;
+
 
           case 2:
             // 💬 Messages
@@ -652,12 +653,28 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               },
             ),
 
+            // 📅 My Calendar (icon فقط على الويب)
+IconButton(
+  tooltip: "My Calendar",
+  icon: const Icon(Icons.calendar_month_outlined, color: accentColor),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CustomerCalendarPage(),
+      ),
+    );
+  },
+),
+
+
             const SizedBox(width: 4),
 
             // 👥 My Experts
             TextButton.icon(
               style: TextButton.styleFrom(
-                foregroundColor: accentColor,
+              foregroundColor: Colors.white,
+              backgroundColor: accentColor,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 shape: RoundedRectangleBorder(
@@ -687,33 +704,34 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
             const SizedBox(width: 4),
 
-            // 📅 My Calendar
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
-                backgroundColor: accentColor,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CustomerCalendarPage(),
-                  ),
-                );
-              },
-              child: const Text(
-                "My Calendar",
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+            // 📚 My Bookings (tab على الويب)
+TextButton(
+  style: TextButton.styleFrom(
+    foregroundColor: Colors.white,
+    backgroundColor: accentColor,
+    padding:
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(999),
+    ),
+  ),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CustomerMyBookingsPage(),
+      ),
+    );
+  },
+  child: const Text(
+    "My Bookings",
+    style: TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+    ),
+  ),
+),
+
 
             const SizedBox(width: 8),
 

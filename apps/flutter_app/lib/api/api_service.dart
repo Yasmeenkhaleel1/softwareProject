@@ -6,7 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import '../config/api_config.dart';
 
 class ApiService {
-  // 🔥 لأن المشروع يعمل فقط على الويب → نستخدم localhost دائماً
+
   static String get baseUrl => "${ApiConfig.baseUrl}/api";
 
 
@@ -647,5 +647,27 @@ static Future<String> askAssistant({
 
   return raw.toString();
 }
+
+  /// 🔹 إلغاء حجز من طرف الكستمر (فقط لو PENDING)
+  static Future<void> cancelCustomerBooking(String bookingId) async {
+    final token = await getToken();
+    if (token == null) {
+      throw Exception("Not authenticated");
+    }
+
+    final uri = Uri.parse('$baseUrl/customer/bookings/$bookingId/cancel');
+
+    final res = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (res.statusCode >= 400) {
+      throw Exception('Failed to cancel booking: ${res.body}');
+    }
+  }
 
 }
