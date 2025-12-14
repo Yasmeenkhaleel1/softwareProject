@@ -1,10 +1,11 @@
 // lib/pages/admin_payments_page.dart
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 class AdminPaymentsPage extends StatefulWidget {
   const AdminPaymentsPage({super.key});
@@ -15,18 +16,21 @@ class AdminPaymentsPage extends StatefulWidget {
 
 class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
   // ✅ دالة ديناميكية للحصول على baseUrl بناءً على المنصة
-  String getBaseUrl() {
-    if (Platform.isAndroid) {
-      // للمحاكي الأندرويد
-      return "http://10.0.2.2:5000";
-    } else if (Platform.isIOS) {
-      // للمحاكي iOS
-      return "http://localhost:5000";
-    } else {
-      // للويب وسطح المكتب
-      return "http://localhost:5000";
-    }
+String getBaseUrl() {
+  if (kIsWeb) {
+    // Web
+    return "http://localhost:5000";
   }
+
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+      return "http://10.0.2.2:5000";
+    case TargetPlatform.iOS:
+      return "http://localhost:5000";
+    default:
+      return "http://localhost:5000";
+  }
+}
 
   bool _loading = true;
   String? _error;
@@ -266,7 +270,8 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
 
       if (res.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Refund requested (Stripe will handle).")),
+          const SnackBar(
+              content: Text("Refund requested (Stripe will handle).")),
         );
         _fetchPayments();
       } else {
@@ -314,7 +319,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 900;
-    
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       body: _loading
@@ -323,9 +328,9 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
             )
           : _error != null
               ? _buildError()
-              : isMobile 
-                ? _buildMobileView()
-                : _buildWebView(),
+              : isMobile
+                  ? _buildMobileView()
+                  : _buildWebView(),
     );
   }
 
@@ -358,55 +363,62 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
           // App Bar
           SliverAppBar(
             backgroundColor: const Color(0xFF285E6E),
-            expandedHeight: 180,
+            expandedHeight: 180, // Increased height to accommodate stats
             floating: false,
             pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              title: const Text(
-                "Payments",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0xFF62C6D9),
-                      Color(0xFF347C8B),
-                      Color(0xFF244C63),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+            centerTitle: true,
+            flexibleSpace: LayoutBuilder(
+              builder: (context, constraints) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFF62C6D9),
+                        Color(0xFF347C8B),
+                        Color(0xFF244C63),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                   ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 100, left: 20, right: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Payments & Refunds",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 70, left: 20, right: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Payments & Refunds",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "Monitor payments and refunds in real-time",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                       
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Monitor payments and refunds in real-time",
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMobileStatsSummary(),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
+SliverToBoxAdapter(
+  child: Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    child: _buildMobileStatsSummary(),
+  ),
+),
 
           // Filters
           SliverToBoxAdapter(
@@ -419,7 +431,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
           // Stats Cards
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: _buildMobileStatCards(),
             ),
           ),
@@ -487,80 +499,89 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
     );
   }
 
-  Widget _buildMobileStatsSummary() {
-    final captured = _filteredPayments.where((p) => p['status'] == "CAPTURED").length;
-    double totalVolume = 0;
-    for (final p in _filteredPayments) {
-      totalVolume += (p['amount'] ?? 0).toDouble();
-    }
 
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  "\$${totalVolume.toStringAsFixed(0)}",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  "Total Volume",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  "$captured",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  "Captured",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+Widget _buildMobileStatsSummary() {
+  final captured =
+      _filteredPayments.where((p) => (p['status'] ?? "") == "CAPTURED").length;
+
+  double totalVolume = 0;
+  for (final p in _filteredPayments) {
+    final raw = p['amount'];
+    if (raw is num) {
+      totalVolume += raw.toDouble();
+    } else if (raw is String) {
+      totalVolume += double.tryParse(raw) ?? 0;
+    }
   }
 
-  Widget _buildMobileFilters() {
-    return Card(
+  return Row(
+    children: [
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF347C8B), // ✅ صار واضح
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "\$${totalVolume.toStringAsFixed(0)}",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                "Total Volume",
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF244C63), // ✅
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "$captured",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                "Captured",
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
+   Widget? _buildMobileFilters() {
+return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 3,
       child: Padding(
@@ -577,10 +598,10 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
               ),
             ),
             const SizedBox(height: 12),
-            
+
             // Status Filter
             DropdownButtonFormField<String>(
-              value: _statusFilter,
+              initialValue: _statusFilter,
               decoration: InputDecoration(
                 labelText: "Status",
                 border: OutlineInputBorder(
@@ -672,6 +693,8 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
         ),
       ),
     );
+    
+   
   }
 
   Widget _buildMobileStatCards() {
@@ -1099,7 +1122,7 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
             SizedBox(
               width: 220,
               child: DropdownButtonFormField<String>(
-                value: _statusFilter,
+                initialValue: _statusFilter,
                 decoration: const InputDecoration(
                   labelText: "Status",
                   border: OutlineInputBorder(),
@@ -1736,12 +1759,11 @@ class _AdminPaymentsPageState extends State<AdminPaymentsPage> {
           status == "CAPTURED"
               ? TextButton.icon(
                   onPressed: () => _refundPayment(p),
-                  icon: const Icon(Icons.reply,
-                      size: 18, color: Colors.redAccent),
+                  icon:
+                      const Icon(Icons.reply, size: 18, color: Colors.redAccent),
                   label: const Text(
                     "Refund",
-                    style:
-                        TextStyle(fontSize: 12, color: Colors.redAccent),
+                    style: TextStyle(fontSize: 12, color: Colors.redAccent),
                   ),
                 )
               : const SizedBox.shrink(),
@@ -1799,6 +1821,31 @@ class _PaymentDetailsSheet extends StatelessWidget {
     required this.onRefund,
     required this.isMobile,
   });
+
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  Color _statusColor(String? status) {
+    switch (status) {
+      case "CAPTURED":
+        return Colors.green;
+      case "AUTHORIZED":
+        return Colors.orange;
+      case "REFUNDED":
+        return Colors.redAccent;
+      case "REFUND_PENDING":
+        return Colors.deepOrange;
+      case "FAILED":
+        return Colors.grey;
+      default:
+        return Colors.blueGrey;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1859,7 +1906,8 @@ class _PaymentDetailsSheet extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _statusColor(payment['status']).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
@@ -1887,14 +1935,18 @@ class _PaymentDetailsSheet extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 // Amount Cards
-                if (isMobile) _buildMobileAmountCards(amount, net, platform, refundedAmount)
-                else _buildWebAmountPills(amount, net, platform, refundedAmount),
+                if (isMobile)
+                  _buildMobileAmountCards(amount, net, platform, refundedAmount)
+                else
+                  _buildWebAmountPills(amount, net, platform, refundedAmount),
 
                 const SizedBox(height: 16),
 
                 // Customer & Expert
-                if (isMobile) _buildMobileUserInfo(payment) 
-                else _buildWebUserInfo(payment),
+                if (isMobile)
+                  _buildMobileUserInfo(payment)
+                else
+                  _buildWebUserInfo(payment),
 
                 const SizedBox(height: 16),
 
@@ -1947,7 +1999,8 @@ class _PaymentDetailsSheet extends StatelessWidget {
                   Column(
                     children: [
                       for (int i = 0; i < timeline.length; i++)
-                        _buildTimelineItem(timeline[i], isLast: i == timeline.length - 1),
+                        _buildTimelineItem(timeline[i],
+                            isLast: i == timeline.length - 1),
                     ],
                   ),
 
@@ -1986,16 +2039,21 @@ class _PaymentDetailsSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildMobileAmountCards(double amount, double net, double platform, double refunded) {
+  Widget _buildMobileAmountCards(
+      double amount, double net, double platform, double refunded) {
     return Column(
       children: [
-        _buildMobileAmountCard("Amount", "\$${amount.toStringAsFixed(2)}", Colors.blue),
+        _buildMobileAmountCard(
+            "Amount", "\$${amount.toStringAsFixed(2)}", Colors.blue),
         const SizedBox(height: 8),
-        _buildMobileAmountCard("Net to Expert", "\$${net.toStringAsFixed(2)}", Colors.green),
+        _buildMobileAmountCard(
+            "Net to Expert", "\$${net.toStringAsFixed(2)}", Colors.green),
         const SizedBox(height: 8),
-        _buildMobileAmountCard("Platform Fee", "\$${platform.toStringAsFixed(2)}", Colors.orange),
+        _buildMobileAmountCard(
+            "Platform Fee", "\$${platform.toStringAsFixed(2)}", Colors.orange),
         const SizedBox(height: 8),
-        _buildMobileAmountCard("Refunded", "\$${refunded.toStringAsFixed(2)}", Colors.red),
+        _buildMobileAmountCard(
+            "Refunded", "\$${refunded.toStringAsFixed(2)}", Colors.red),
       ],
     );
   }
@@ -2042,15 +2100,19 @@ class _PaymentDetailsSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildWebAmountPills(double amount, double net, double platform, double refunded) {
+  Widget _buildWebAmountPills(
+      double amount, double net, double platform, double refunded) {
     return Wrap(
       spacing: 12,
       runSpacing: 8,
       children: [
         _buildAmountPill("Amount", "\$${amount.toStringAsFixed(2)}", Colors.blue),
-        _buildAmountPill("Net to Expert", "\$${net.toStringAsFixed(2)}", Colors.green),
-        _buildAmountPill("Platform Fee", "\$${platform.toStringAsFixed(2)}", Colors.orange),
-        _buildAmountPill("Refunded", "\$${refunded.toStringAsFixed(2)}", Colors.red),
+        _buildAmountPill(
+            "Net to Expert", "\$${net.toStringAsFixed(2)}", Colors.green),
+        _buildAmountPill(
+            "Platform Fee", "\$${platform.toStringAsFixed(2)}", Colors.orange),
+        _buildAmountPill(
+            "Refunded", "\$${refunded.toStringAsFixed(2)}", Colors.red),
       ],
     );
   }
@@ -2090,9 +2152,11 @@ class _PaymentDetailsSheet extends StatelessWidget {
   Widget _buildMobileUserInfo(dynamic p) {
     return Column(
       children: [
-        _buildUserInfoTile("Customer", p['customer']?['email'] ?? "-", Icons.person_outline),
+        _buildUserInfoTile(
+            "Customer", p['customer']?['email'] ?? "-", Icons.person_outline),
         const SizedBox(height: 8),
-        _buildUserInfoTile("Expert", p['expert']?['email'] ?? "-", Icons.engineering),
+        _buildUserInfoTile(
+            "Expert", p['expert']?['email'] ?? "-", Icons.engineering),
       ],
     );
   }
@@ -2101,11 +2165,13 @@ class _PaymentDetailsSheet extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _buildUserInfoTile("Customer", p['customer']?['email'] ?? "-", Icons.person_outline),
+          child: _buildUserInfoTile(
+              "Customer", p['customer']?['email'] ?? "-", Icons.person_outline),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: _buildUserInfoTile("Expert", p['expert']?['email'] ?? "-", Icons.engineering),
+          child: _buildUserInfoTile(
+              "Expert", p['expert']?['email'] ?? "-", Icons.engineering),
         ),
       ],
     );
@@ -2260,30 +2326,5 @@ class _PaymentDetailsSheet extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  DateTime? _parseDate(dynamic value) {
-    if (value == null) return null;
-    if (value is String) {
-      return DateTime.tryParse(value);
-    }
-    return null;
-  }
-
-  Color _statusColor(String? status) {
-    switch (status) {
-      case "CAPTURED":
-        return Colors.green;
-      case "AUTHORIZED":
-        return Colors.orange;
-      case "REFUNDED":
-        return Colors.redAccent;
-      case "REFUND_PENDING":
-        return Colors.deepOrange;
-      case "FAILED":
-        return Colors.grey;
-      default:
-        return Colors.blueGrey;
-    }
   }
 }

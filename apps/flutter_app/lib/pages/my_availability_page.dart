@@ -212,7 +212,7 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
                     Switch(
                       inactiveThumbColor: Colors.grey.shade400,
                       inactiveTrackColor: Colors.grey.shade300,
-                      activeColor: const Color(0xFF00A1C9),
+                      activeThumbColor: const Color(0xFF00A1C9),
                       value: d['active'],
                       onChanged: (v) => setState(() => d['active'] = v),
                     ),
@@ -375,7 +375,7 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
         ),
         const SizedBox(height: 10),
-        ...exceptions.map((e) => _buildExceptionTile(e)).toList(),
+        ...exceptions.map((e) => _buildExceptionTile(e)),
         const SizedBox(height: 10),
         ElevatedButton.icon(
           onPressed: _addExceptionDialog,

@@ -476,7 +476,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedCategory,
+                    initialValue: _selectedCategory,
                     decoration: InputDecoration(
                       hintText: "Category",
                       border: OutlineInputBorder(
@@ -799,7 +799,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               },
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }
@@ -1382,7 +1382,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedCategory,
+                    initialValue: _selectedCategory,
                     decoration: InputDecoration(
                       labelText: "Category",
                       filled: true,
@@ -1414,7 +1414,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 const SizedBox(width: 14),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _sortBy,
+                    initialValue: _sortBy,
                     decoration: InputDecoration(
                       labelText: "Sort by",
                       filled: true,

@@ -179,7 +179,7 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
           if (_payments.isEmpty)
             _emptyPaymentsCard()
           else
-            ..._payments.map((p) => _paymentTile(p)).toList(),
+            ..._payments.map((p) => _paymentTile(p)),
         ],
       ),
     );
@@ -509,7 +509,7 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
           Expanded(
             child: LineChart(
               LineChartData(
-                gridData: FlGridData(show: true, horizontalInterval: spots.length > 0 ? (spots.last.y / 4).clamp(1, double.infinity) : 1),
+                gridData: FlGridData(show: true, horizontalInterval: spots.isNotEmpty ? (spots.last.y / 4).clamp(1, double.infinity) : 1),
                 borderData: FlBorderData(
                   show: true,
                   border: const Border(

@@ -14,7 +14,7 @@ class AdminHome extends StatefulWidget {
 
 class _AdminHomeState extends State<AdminHome> {
   int selectedIndex = 0;
-  bool _drawerOpen = false;
+  final bool _drawerOpen = false;
 
   final pages = [
     AdminDashboardPage(),

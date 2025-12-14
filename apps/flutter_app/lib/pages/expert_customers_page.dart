@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
-import '../../api/api_service.dart';
+import '../../api/api_service.dart'; // ✅ احتفظي بـ ApiService
+import '../../config/api_config.dart'; // ✅ للإصلاح فقط
 import './chat/chat_page.dart';
 
 class ExpertCustomersPage extends StatefulWidget {
@@ -51,7 +55,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
         return;
       }
 
-      // نجيب كل الحجوزات لهذا الخبير (من الـ API الخاص بالخبير)
+      // ✅ استخدمي ApiService كما كانت
       final bookings = await ApiService.fetchExpertBookings();
 
       // نكوّن خريطة: customerId -> _CustomerContact
@@ -73,7 +77,12 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
             (customer['name'] ?? customer['email'] ?? 'Customer')
                 .toString();
         final customerEmail = (customer['email'] ?? '').toString();
-        final avatar = (customer['profilePic'] ?? '').toString();
+        
+        // ✅ فقط هنا أصلحي رابط الصورة
+        String rawAvatar = (customer['profilePic'] ?? 
+                           customer['profileImageUrl'] ?? 
+                           '').toString();
+        final avatarUrl = ApiConfig.fixAssetUrl(rawAvatar); // ✅ الإصلاح الوحيد
 
         final startAtStr = (b['startAt'] ?? '').toString();
         DateTime? startAt;
@@ -87,7 +96,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
             id: customerId,
             name: customerName,
             email: customerEmail,
-            avatarUrl: avatar,
+            avatarUrl: avatarUrl, // ✅ استخدام الرابط المصحح
             lastBookingAt: startAt,
             totalBookings: 1,
           );
@@ -129,7 +138,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
 
   Future<void> _openChatWithCustomer(_CustomerContact customer) async {
     try {
-      // نستخدم API خاص بالخبير
+      // ✅ استخدمي ApiService كما كانت
       final conv = await ApiService.getOrCreateConversationAsExpert(
         customerId: customer.id,
       );
@@ -327,7 +336,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
                 radius: 26,
                 backgroundColor: _brand.withOpacity(0.15),
                 backgroundImage: customer.avatarUrl.isNotEmpty
-                    ? NetworkImage(customer.avatarUrl)
+                    ? NetworkImage(customer.avatarUrl) // ✅ الآن URL كامل
                     : null,
                 child: customer.avatarUrl.isEmpty
                     ? Text(

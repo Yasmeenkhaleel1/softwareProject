@@ -215,7 +215,7 @@ class _SignupPageState extends State<SignupPage> {
                             ),
                             const SizedBox(height: 10),
                             DropdownButtonFormField<String>(
-                              value: gender,
+                              initialValue: gender,
                               decoration: const InputDecoration(
                                 labelText: 'Gender',
                                 prefixIcon: Icon(Icons.person),
@@ -232,7 +232,7 @@ class _SignupPageState extends State<SignupPage> {
                             ),
                             const SizedBox(height: 10),
                             DropdownButtonFormField<String>(
-                              value: role,
+                              initialValue: role,
                               decoration: const InputDecoration(
                                 labelText: 'I am a ...',
                                 prefixIcon: Icon(Icons.badge),

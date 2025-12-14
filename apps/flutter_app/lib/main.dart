@@ -32,7 +32,6 @@ import 'pages/ExpertDetailPage.dart';
 import 'pages/admin_dashboard_page.dart';
 import 'pages/expert_earnings_page.dart';
 
-import 'services/auth_service.dart';
 
 // ----------------------------------------------------------------------------
 //🔥 FCM Background Handler + Local Notifications

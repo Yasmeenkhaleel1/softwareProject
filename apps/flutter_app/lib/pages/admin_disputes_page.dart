@@ -1037,7 +1037,7 @@ class _DisputeDecisionDialogState extends State<_DisputeDecisionDialog> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: _resolution,
+                              initialValue: _resolution,
                               decoration: const InputDecoration(
                                 labelText: 'Resolution',
                                 border: OutlineInputBorder(),

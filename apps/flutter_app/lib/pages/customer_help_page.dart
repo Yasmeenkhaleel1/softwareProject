@@ -323,7 +323,7 @@ class _CustomerHelpPageState extends State<CustomerHelpPage> {
 
               // Booking dropdown
               DropdownButtonFormField<String>(
-                value: _selectedBookingId,
+                initialValue: _selectedBookingId,
                 decoration: const InputDecoration(
                   labelText: "Select booking",
                   border: OutlineInputBorder(),
@@ -354,7 +354,7 @@ class _CustomerHelpPageState extends State<CustomerHelpPage> {
 
               // Issue type
               DropdownButtonFormField<String>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(
                   labelText: "Issue type",
                   border: OutlineInputBorder(),

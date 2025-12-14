@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'customer_dashboard_page.dart';
-
+import 'package:flutter/foundation.dart';
 class CustomerProfilePage extends StatefulWidget {
   const CustomerProfilePage({super.key});
 
@@ -27,7 +27,13 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
   final ageController = TextEditingController();
   final genderController = TextEditingController();
 
-  static const baseUrl = "http://localhost:5000";
+   String get baseUrl {
+    if (kIsWeb) {
+      return "http://localhost:5000";
+    } else {
+      return "http://10.0.2.2:5000";
+    }
+  }
   static const Color primaryColor = Color(0xFF62C6D9);
 
   late TabController _tabController;

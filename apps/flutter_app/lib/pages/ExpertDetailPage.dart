@@ -296,7 +296,7 @@ class _ExpertDetailPageState extends State<ExpertDetailPage> {
             "No published services yet.",
             style: TextStyle(color: Colors.grey),
           ),
-        ...services.map((s) => _serviceCard(s as Map<String, dynamic>)).toList(),
+        ...services.map((s) => _serviceCard(s as Map<String, dynamic>)),
       ],
     );
   }
@@ -586,11 +586,11 @@ class _SlotPickerSheetState extends State<_SlotPickerSheet> {
       final fromDate = DateTime(now.year, now.month, now.day);
       final toDate = fromDate.add(const Duration(days: 14));
 
-      String _fmt(DateTime d) =>
+      String fmt(DateTime d) =>
           "${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
-      final fromStr = _fmt(fromDate);
-      final toStr = _fmt(toDate);
+      final fromStr = fmt(fromDate);
+      final toStr = fmt(toDate);
 
       final uri = Uri.parse(
           "${widget.baseUrl}/api/public/experts/${widget.expertId}/calendar-status?from=$fromStr&to=$toStr&durationMinutes=${widget.durationMinutes}");

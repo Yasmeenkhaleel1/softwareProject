@@ -14,8 +14,6 @@ import '../services/push_notification_service.dart';
 import 'landing_page.dart';
 import 'expert_profile_page.dart';
 import 'waiting_approval_page.dart';
-import 'admin_dashboard_page.dart';
-import 'customer_dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   final Future<void> Function() onLoginSuccess;

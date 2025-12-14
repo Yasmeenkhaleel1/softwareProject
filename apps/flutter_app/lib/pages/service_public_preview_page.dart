@@ -5,9 +5,11 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:flutter/foundation.dart';
+
 class ServicePublicPreviewPage extends StatefulWidget {
   final Map<String, dynamic> service;
-  const ServicePublicPreviewPage({super.key, required this.service});
+  const ServicePublicPreviewPage({super.key, required this.service, required serviceId});
 
   @override
   State<ServicePublicPreviewPage> createState() =>
@@ -68,7 +70,7 @@ class _ServicePublicPreviewPageState extends State<ServicePublicPreviewPage> {
 
       // ✅ مركز الصفحة وعرض ثابت للويب فقط
       body: Center(
-        child: Container(
+        child: SizedBox(
           width: 1100,
           child: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 40),

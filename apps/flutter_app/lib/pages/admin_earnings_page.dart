@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:flutter/foundation.dart' show kIsWeb;
 class AdminEarningsPage extends StatefulWidget {
   const AdminEarningsPage({super.key});
 
@@ -15,16 +15,19 @@ class AdminEarningsPage extends StatefulWidget {
 class _AdminEarningsPageState extends State<AdminEarningsPage> {
   // Use real computer IP
   String getBaseUrl() {
-    // Option 1: For emulator
-    if (Platform.isAndroid) {
-      return "http://10.0.2.2:5000";
+    // Check for web platform
+    if (kIsWeb) {
+      return "http://localhost:5000"; // For web browser
     }
     
-    // Option 2: For real device (make sure to put computer IP)
-    // return "http://192.168.1.100:5000"; // ← Replace with your computer IP
-    
-    // Option 3: Demo mode only
-    return "DEMO_MODE"; // Demo mode without connection
+    // For mobile/desktop
+    if (Platform.isAndroid) {
+      return "http://10.0.2.2:5000"; // Android emulator
+    } else if (Platform.isIOS) {
+      return "http://localhost:5000"; // iOS simulator
+    } else {
+      return "http://localhost:5000"; // Desktop/Web
+    }
   }
   
   final Color brand = const Color(0xFF62C6D9);
@@ -34,19 +37,19 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
 
   bool _loading = false;
   String? _error;
-  bool _demoMode = true;
+  bool _demoMode = false; // Changed to false by default
 
   // Data
-  double totalProcessed = 12500.75;
-  double totalNetToExperts = 9500.25;
-  double totalPlatformFees = 3000.50;
-  double totalRefunds = 500.00;
-  int paymentsCount = 47;
+  double totalProcessed = 0.0;
+  double totalNetToExperts = 0.0;
+  double totalPlatformFees = 0.0;
+  double totalRefunds = 0.0;
+  int paymentsCount = 0;
   Map<String, int> statusCounts = {
-    'CAPTURED': 32,
-    'AUTHORIZED': 8,
-    'REFUND_PENDING': 3,
-    'REFUNDED': 4,
+    'CAPTURED': 0,
+    'AUTHORIZED': 0,
+    'REFUND_PENDING': 0,
+    'REFUNDED': 0,
   };
 
   List<Map<String, dynamic>> payments = [];
@@ -62,53 +65,119 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
+    
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(milliseconds: 800));
-      
       final baseUrl = getBaseUrl();
+      print('Loading from: $baseUrl'); // Debug log
       
-      if (baseUrl == "DEMO_MODE") {
-        // Demo mode - fake data
-        _demoMode = true;
-        _loadDemoData();
-      } else {
-        // Try to connect to server
-        _demoMode = false;
-        final token = await _getToken();
-        
-        if (token == null || token.isEmpty) {
-          throw Exception("Please login first");
-        }
-        
-        // Try to connect to server
-        final response = await http.get(
-          Uri.parse("$baseUrl/api/admin/earnings/summary"),
-          headers: {'Authorization': 'Bearer $token'},
-        ).timeout(const Duration(seconds: 10));
-        
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          // Process real data here
-          _processRealData(data);
-        } else {
-          throw Exception("Server error: ${response.statusCode}");
-        }
+      // Try to load real data first
+      final token = await _getToken();
+      
+      if (token == null || token.isEmpty) {
+        throw Exception("Please login first");
       }
+      
+      // Try to get summary
+      final summaryResponse = await http.get(
+        Uri.parse("$baseUrl/api/admin/earnings/summary"),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 10));
+      
+      print('Summary status: ${summaryResponse.statusCode}'); // Debug
+      
+      if (summaryResponse.statusCode == 200) {
+        final data = jsonDecode(summaryResponse.body);
+        print('Summary data: $data'); // Debug
+        
+        if (!mounted) return;
+        
+        setState(() {
+          totalProcessed = (data['totalProcessed'] ?? 0).toDouble();
+          totalNetToExperts = (data['totalNetToExperts'] ?? 0).toDouble();
+          totalPlatformFees = (data['totalPlatformFees'] ?? 0).toDouble();
+          totalRefunds = (data['totalRefunds'] ?? 0).toDouble();
+          paymentsCount = data['paymentsCount'] ?? 0;
+          
+          if (data['statusCounts'] != null) {
+            final counts = Map<String, int>.from(data['statusCounts']);
+            statusCounts = {
+              'CAPTURED': counts['CAPTURED'] ?? 0,
+              'AUTHORIZED': counts['AUTHORIZED'] ?? 0,
+              'REFUND_PENDING': counts['REFUND_PENDING'] ?? 0,
+              'REFUNDED': counts['REFUNDED'] ?? 0,
+            };
+          }
+          _demoMode = false;
+        });
+        
+        // Now load payments
+        await _loadPayments(token);
+        
+      } else {
+        throw Exception("Server error: ${summaryResponse.statusCode}");
+      }
+      
     } catch (e) {
+      print('Error loading data: $e'); // Debug
+      
       // If connection fails, use demo data
-      _demoMode = true;
-      _loadDemoData();
-      _error = "Loaded demo data: $e";
+      if (mounted) {
+        setState(() {
+          _demoMode = true;
+          _loadDemoData();
+          _error = "Using demo data: $e";
+        });
+      }
     } finally {
       if (mounted) {
         setState(() => _loading = false);
       }
+    }
+  }
+
+  Future<void> _loadPayments(String token) async {
+    try {
+      final baseUrl = getBaseUrl();
+      final paymentsResponse = await http.get(
+        Uri.parse("$baseUrl/api/admin/earnings/payments"),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 10));
+      
+      print('Payments status: ${paymentsResponse.statusCode}'); // Debug
+      
+      if (paymentsResponse.statusCode == 200) {
+        final data = jsonDecode(paymentsResponse.body);
+        print('Payments data received, items: ${data['items']?.length ?? 0}'); // Debug
+        
+        if (data['items'] != null && data['items'] is List) {
+          final items = List<Map<String, dynamic>>.from(data['items'] as List);
+          
+          if (!mounted) return;
+          
+          setState(() {
+            payments = items;
+            filteredPayments = List.from(payments);
+            paymentsCount = payments.length; // Update count
+          });
+          
+          print('Loaded ${payments.length} payments'); // Debug
+        } else {
+          print('No items in response or wrong format'); // Debug
+          throw Exception('Invalid payments data format');
+        }
+      } else {
+        throw Exception("Payments error: ${paymentsResponse.statusCode}");
+      }
+    } catch (e) {
+      print('Error loading payments: $e'); // Debug
+      // Load demo payments if real ones fail
+      _loadDemoPayments();
     }
   }
 
@@ -122,8 +191,27 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
   }
 
   void _loadDemoData() {
+    // Demo summary data
+    setState(() {
+      totalProcessed = 12500.75;
+      totalNetToExperts = 9500.25;
+      totalPlatformFees = 3000.50;
+      totalRefunds = 500.00;
+      paymentsCount = 47;
+      statusCounts = {
+        'CAPTURED': 32,
+        'AUTHORIZED': 8,
+        'REFUND_PENDING': 3,
+        'REFUNDED': 4,
+      };
+    });
+    
+    _loadDemoPayments();
+  }
+
+  void _loadDemoPayments() {
     // Generate fake data
-    payments = List.generate(20, (index) {
+    final demoPayments = List.generate(20, (index) {
       final statuses = ['CAPTURED', 'AUTHORIZED', 'REFUND_PENDING', 'REFUNDED', 'FAILED'];
       final status = statuses[index % statuses.length];
       final amount = 100.0 + (index * 50.0);
@@ -147,26 +235,14 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
         },
         'service': {'title': services[index % services.length]},
         'booking': {'code': 'BOOK-${2000 + index}'},
-        'createdAt': DateTime.now().subtract(Duration(days: index, hours: index * 2)).toString(),
+        'createdAt': DateTime.now().subtract(Duration(days: index, hours: index * 2)).toIso8601String(),
       };
     });
     
-    filteredPayments = List.from(payments);
-    _applyFilters();
-  }
-
-  void _processRealData(Map<String, dynamic> data) {
-    // Process real data from server
     setState(() {
-      totalProcessed = (data['totalProcessed'] ?? 0).toDouble();
-      totalNetToExperts = (data['totalNetToExperts'] ?? 0).toDouble();
-      totalPlatformFees = (data['totalPlatformFees'] ?? 0).toDouble();
-      totalRefunds = (data['totalRefunds'] ?? 0).toDouble();
-      paymentsCount = data['paymentsCount'] ?? 0;
-      
-      if (data['statusCounts'] != null) {
-        statusCounts = Map<String, int>.from(data['statusCounts']);
-      }
+      payments = demoPayments;
+      filteredPayments = List.from(demoPayments);
+      _applyFilters(); // Apply initial filter
     });
   }
 
@@ -317,7 +393,7 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _demoMode ? "Demo Mode - Fake Data" : "Real Data",
+                        _demoMode ? "Demo Mode - Sample Data" : "Live Data",
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -354,7 +430,7 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: statusFilter,
+                        initialValue: statusFilter,
                         decoration: InputDecoration(
                           labelText: "Payment Status",
                           border: OutlineInputBorder(
@@ -397,7 +473,6 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
                           const SizedBox(width: 12),
                           IconButton(
                             onPressed: () {
-                              // Show connection info
                               _showConnectionInfo();
                             },
                             icon: const Icon(Icons.info_outline),
@@ -563,7 +638,7 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
             ),
           ),
 
-          // Payments List
+          // Payments List - FIXED: Now properly displays payments
           if (filteredPayments.isEmpty)
             SliverToBoxAdapter(
               child: Container(
@@ -1013,7 +1088,7 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
                           SizedBox(
                             width: 300,
                             child: DropdownButtonFormField<String>(
-                              value: statusFilter,
+                              initialValue: statusFilter,
                               decoration: InputDecoration(
                                 labelText: "Filter by Status",
                                 border: OutlineInputBorder(
@@ -1053,7 +1128,7 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
                                 fillColor: Colors.grey.shade50,
                               ),
                               onChanged: (value) {
-                                // You can add search functionality here later
+                                // Search functionality can be added here
                               },
                             ),
                           ),
@@ -1108,7 +1183,7 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
 
               const SizedBox(height: 32),
 
-              // Payments Table
+              // Payments Table - FIXED: Now properly displays payments
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -1347,12 +1422,14 @@ class _AdminEarningsPageState extends State<AdminEarningsPage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                // You can add a button to switch to real mode here
+                _loadData(); // Try to reload real data
               },
-              child: const Text("Connect to Server"),
+              child: const Text("Try Connect"),
             ),
         ],
       ),
     );
   }
 }
+
+// Add this import at the top of the file

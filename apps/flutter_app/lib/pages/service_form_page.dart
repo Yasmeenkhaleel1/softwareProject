@@ -5,17 +5,24 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 
 class ServiceFormPage extends StatefulWidget {
   final Map<String, dynamic>? existing;
-  const ServiceFormPage({super.key, this.existing});
+  const ServiceFormPage({super.key, this.existing, required Map<String, dynamic> service});
 
   @override
   State<ServiceFormPage> createState() => _ServiceFormPageState();
 }
 
 class _ServiceFormPageState extends State<ServiceFormPage> {
-  static const baseUrl = "http://localhost:5000";
+String get baseUrl {
+  if (kIsWeb) {
+    return "http://localhost:5000";
+  } else {
+    return "http://10.0.2.2:5000";
+  }
+}
   final _formKey = GlobalKey<FormState>();
 
   final _title = TextEditingController();
@@ -240,7 +247,7 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
-        value: _selectedCategory,
+        initialValue: _selectedCategory,
         items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
         onChanged: (val) => setState(() => _selectedCategory = val),
         decoration: InputDecoration(

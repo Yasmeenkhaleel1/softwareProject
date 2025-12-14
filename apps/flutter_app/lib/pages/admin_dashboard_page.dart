@@ -1,10 +1,12 @@
 // lib/pages/admin_dashboard_page.dart
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_app/pages/landing_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 import '../widgets/stat_card.dart';
 import '../widgets/chart_card.dart';
@@ -24,6 +26,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  // ======================
+  // MOBILE STATE
+  // ======================
+  int _mobileIndex = 0;
+  late List<Widget> _mobilePages;
+
+  // ======================
+  // DATA
+  // ======================
   bool loadingStats = true;
   bool loadingExperts = true;
 
@@ -43,26 +54,37 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
   List<dynamic> pendingExperts = [];
 
-  // ✅ دالة ديناميكية للحصول على baseUrl بناءً على المنصة
+  // ======================
+  // BASE URL
+  // ======================
   String getBaseUrl() {
-    if (Platform.isAndroid) {
-      // للمحاكي الأندرويد
-      return "http://10.0.2.2:5000";
-    } else if (Platform.isIOS) {
-      // للمحاكي iOS
-      return "http://localhost:5000";
-    } else {
-      // للويب وسطح المكتب
-      return "http://localhost:5000";
+    if (kIsWeb) return "http://localhost:5000";
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return "http://10.0.2.2:5000";
+      case TargetPlatform.iOS:
+        return "http://localhost:5000";
+      default:
+        return "http://localhost:5000";
     }
-    // ملاحظة: إذا كان السيرفر على جهاز مختلف، استخدم IP ذلك الجهاز
-    // مثال: return "http://192.168.1.100:5000";
   }
 
   @override
   void initState() {
     super.initState();
+
     _tabController = TabController(length: 5, vsync: this);
+
+    // تهيئة صفحات الموبايل
+    _mobilePages = [
+      const SizedBox(), // سيتم تعبئته لاحقاً
+      const SizedBox(),
+      AdminPaymentsPage(),
+      AdminEarningsPage(),
+      const AdminDisputesPage(),
+    ];
+
     _fetchDashboardStats();
     _fetchPendingExperts();
   }
@@ -76,15 +98,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   // ======================
   // API CALLS
   // ======================
-
   Future<void> _fetchDashboardStats() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
-      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
       final res = await http.get(
-        Uri.parse("$baseUrl/api/admin/stats"),
+        Uri.parse("${getBaseUrl()}/api/admin/stats"),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -114,13 +134,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           loadingStats = false;
         });
       } else {
-        debugPrint("❌ Stats error: ${res.statusCode}");
-        debugPrint("📡 Base URL: $baseUrl");
         setState(() => loadingStats = false);
       }
-    } catch (e) {
-      debugPrint("⚠️ Error fetching stats: $e");
-      debugPrint("🔍 تأكد أن السيرفر يعمل على ${getBaseUrl()}");
+    } catch (_) {
       setState(() => loadingStats = false);
     }
   }
@@ -130,9 +146,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
-      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
       final res = await http.get(
-        Uri.parse("$baseUrl/api/admin/experts/pending"),
+        Uri.parse("${getBaseUrl()}/api/admin/experts/pending"),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -143,11 +158,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           loadingExperts = false;
         });
       } else {
-        debugPrint("❌ Pending experts error: ${res.statusCode}");
         setState(() => loadingExperts = false);
       }
-    } catch (e) {
-      debugPrint("⚠️ Error fetching pending experts: $e");
+    } catch (_) {
       setState(() => loadingExperts = false);
     }
   }
@@ -157,9 +170,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
-      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
       final res = await http.patch(
-        Uri.parse("$baseUrl/api/admin/experts/$id/approve"),
+        Uri.parse("${getBaseUrl()}/api/admin/experts/$id/approve"),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -213,9 +225,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
-      final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
       final res = await http.patch(
-        Uri.parse("$baseUrl/api/admin/experts/$id/reject"),
+        Uri.parse("${getBaseUrl()}/api/admin/experts/$id/reject"),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -237,35 +248,116 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   // ======================
   // BUILD
   // ======================
-
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 760;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
-      body: isMobile ? _buildMobileView() : _buildWebView(),
+      appBar: isMobile ? _buildMobileAppBar() : null,
+      body: isMobile ? _buildMobileBody() : _buildWebView(),
+      bottomNavigationBar: isMobile ? _buildMobileBottomNav() : null,
     );
   }
 
-  Widget _buildMobileView() {
-    return NestedScrollView(
-      headerSliverBuilder: (context, innerBoxIsScrolled) => [
-        _buildMobileAppBar(),
-      ],
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildMobileDashboard(),
-          _buildPendingExperts(),
-          AdminPaymentsPage(),
-          AdminEarningsPage(),
-          const AdminDisputesPage(),
-        ],
+  // ======================
+  // MOBILE UI
+  // ======================
+PreferredSizeWidget _buildMobileAppBar() {
+  return PreferredSize(
+    preferredSize: const Size.fromHeight(70),
+    child: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF62C6D9),
+            Color(0xFF347C8B),
+            Color(0xFF244C63),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                "Lost Treasures",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white, // ✅ أبيض
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.clear();
+
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => LandingPage(
+                      isLoggedIn: false,
+                      onLogout: () {},
+                    ),
+                  ),
+                  (_) => false,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+  Widget _buildMobileBody() {
+    // تحديث صفحات الموبايل ببيانات حية
+    _mobilePages = [
+      _buildMobileDashboard(),
+      _buildPendingExperts(),
+      AdminPaymentsPage(),
+      AdminEarningsPage(),
+      const AdminDisputesPage(),
+    ];
+
+    return IndexedStack(
+      index: _mobileIndex,
+      children: _mobilePages,
     );
   }
 
+  Widget _buildMobileBottomNav() {
+    return BottomNavigationBar(
+      currentIndex: _mobileIndex,
+      onTap: (i) => setState(() => _mobileIndex = i),
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: const Color(0xFF2970B8),
+      unselectedItemColor: Colors.grey,
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: "Dashboard"),
+        BottomNavigationBarItem(icon: Icon(Icons.people), label: "Experts"),
+        BottomNavigationBarItem(icon: Icon(Icons.payments), label: "Payments"),
+        BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: "Earnings"),
+        BottomNavigationBarItem(icon: Icon(Icons.gavel), label: "Disputes"),
+      ],
+    );
+  }
+
+  // ======================
+  // WEB UI
+  // ======================
   Widget _buildWebView() {
     return Column(
       children: [
@@ -285,10 +377,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       ],
     );
   }
-
-  // ======================
-  // WEB UI
-  // ======================
 
   PreferredSize _buildWebAppBar() {
     return PreferredSize(
@@ -365,6 +453,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     );
   }
 
+  // ======================
+  // DASHBOARDS
+  // ======================
   Widget _buildWebDashboard() {
     if (loadingStats) {
       return const Center(
@@ -407,68 +498,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
             if (paymentsByStatus.isNotEmpty)
               PaymentsStatusPieCard(data: paymentsByStatus),
           ],
-        ),
-      ),
-    );
-  }
-
-  // ======================
-  // MOBILE UI
-  // ======================
-
-  SliverAppBar _buildMobileAppBar() {
-    return SliverAppBar(
-      expandedHeight: 140,
-      collapsedHeight: 80,
-      floating: true,
-      pinned: true,
-      snap: false,
-      backgroundColor: const Color(0xFF2970B8),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF62C6D9).withOpacity(0.85),
-                const Color(0xFF347C8B).withOpacity(0.90),
-                const Color(0xFF244C63).withOpacity(0.95),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        title: const Text(
-          "Admin Dashboard",
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(48),
-        child: Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            indicator: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: const Color(0xFF2970B8).withOpacity(0.15),
-            ),
-            labelColor: const Color(0xFF2970B8),
-            unselectedLabelColor: Colors.grey,
-            tabs: const [
-              Tab(icon: Icon(Icons.dashboard_customize, size: 20), text: "Dashboard"),
-              Tab(icon: Icon(Icons.pending_actions, size: 20), text: "Experts"),
-              Tab(icon: Icon(Icons.payments, size: 20), text: "Payments"),
-              Tab(icon: Icon(Icons.show_chart, size: 20), text: "Earnings"),
-              Tab(icon: Icon(Icons.gavel_outlined, size: 20), text: "Disputes"),
-            ],
-          ),
         ),
       ),
     );
@@ -792,7 +821,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
   // ======================
   // PENDING EXPERTS
   // ======================
-
   Widget _buildPendingExperts() {
     if (loadingExperts) {
       return const Center(
@@ -817,7 +845,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         final user = expert['userId'] ?? {};
         final displayName = user['name'] ?? expert['name'] ?? "Unknown Expert";
         final email = user['email'] ?? "";
-        final baseUrl = getBaseUrl(); // ✅ استخدام الدالة الديناميكية
+        final baseUrl = getBaseUrl();
         final profileImageUrl = expert['profileImageUrl'] ??
             "$baseUrl/uploads/default_profile.png";
 
@@ -1309,7 +1337,7 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: Colors.grey),
+          style: const TextStyle(fontSize: 11, color: Color.fromARGB(255, 253, 142, 142)),
         ),
       ],
     );
