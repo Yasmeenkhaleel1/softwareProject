@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import Service from "../models/expert/service.model.js";
 import { auth } from "../middleware/auth.js";
 
+import { updateExpertRatingByUserId } from "../services/expertRating.service.js";
+
 const router = Router();
 
 /* =====================================================
@@ -269,6 +271,15 @@ router.post("/:id/rate", auth(), async (req, res) => {
     service.ratingAvg = total / service.ratingCount;
 
     await service.save();
+
+    // ⭐️ جديد: حدّث Rating البروفايل بناءً على الخدمات
+await updateExpertRatingByUserId(service.expert);
+
+res.json({
+  message: "Rating updated successfully",
+  ratingAvg: service.ratingAvg,
+});
+
     res.json({ message: "Rating updated successfully", ratingAvg: service.ratingAvg });
   } catch (err) {
     console.error("❌ Rating error:", err);

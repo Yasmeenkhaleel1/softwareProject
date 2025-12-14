@@ -509,28 +509,51 @@ export const setMeetingLink = async (req, res) => {
 export const dashboardStats = async (req, res) => {
   try {
     const userId = req.user.id;
+    const expertObjectId = new mongoose.Types.ObjectId(userId);
 
-    // الخدمات مربوطة باليوزر (حسب سكيمة Service عندك)
+    // ===== 1) إحصائيات أساسية =====
     const totalServices = await Service.countDocuments({
-      expert: userId,
+      expert: expertObjectId,
     });
 
-    const match = {
-      $or: [{ expertUserId: new mongoose.Types.ObjectId(userId) }],
+    const bookingMatch = {
+      $or: [{ expertUserId: expertObjectId }],
     };
 
-    const totalBookings = await Booking.countDocuments(match);
+    const totalBookings = await Booking.countDocuments(bookingMatch);
     const totalClients = (
-      await Booking.distinct("customer", match)
+      await Booking.distinct("customer", bookingMatch)
     ).length;
 
-    res.json({
+    // ===== 2) حساب قيمة الـ Wallet (صافي أرباح الخبير) =====
+    const payments = await Payment.find({
+      expert: expertObjectId,
+      status: "CAPTURED", // فقط المدفوعات المحصَّلة فعلياً
+    }).select("netToExpert refundedAmount status");
+
+    let wallet = 0;
+
+    for (const p of payments) {
+      // لو حابة تحسبيها ببساطة = مجموع netToExpert
+      // بدون خصم Refunds ممكن تخليها:
+      // wallet += p.netToExpert || 0;
+
+      const net = p.netToExpert || 0;
+      const refunded = p.refundedAmount || 0;
+
+      // 🔹 رصيد الدفعة = صافي للخبير - ما تم رده
+      wallet += Math.max(net - refunded, 0);
+    }
+
+    return res.json({
       services: totalServices,
       bookings: totalBookings,
       clients: totalClients,
+      wallet, // 🔥 هذه القيمة اللي حنستخدمها في Flutter
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("dashboardStats error:", err);
+    return res.status(500).json({ error: err.message });
   }
 };
 

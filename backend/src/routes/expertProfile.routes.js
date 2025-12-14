@@ -1,5 +1,6 @@
 // src/routes/expertProfile.routes.js
 import express from "express";
+
 import {
   createExpertProfile,
   getMyExpertProfile,
@@ -44,7 +45,7 @@ router.get("/view/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const profile = await ExpertProfile.findOne({ userId }).select(
-      "name bio specialization experience location gallery certificates profileImageUrl status"
+       "name bio specialization experience location gallery certificates profileImageUrl status ratingAvg ratingCount"
     );
 
     if (!profile)

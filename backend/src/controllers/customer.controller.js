@@ -13,7 +13,7 @@ export const listApprovedExpertsForCustomers = async (req, res) => {
 
     const experts = await ExpertProfile
       .find({ status: "approved" })
-      .select("name specialization experience location profileImageUrl bio userId")
+      .select("name specialization experience location profileImageUrl bio userId ratingAvg ratingCount")
       .skip((+page - 1) * +limit)
       .limit(+limit);
 

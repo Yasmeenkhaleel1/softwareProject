@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/api_config.dart';
 import 'service_form_page.dart';
 import 'service_public_preview_page.dart';
 
@@ -16,23 +17,24 @@ class MyServicesPage extends StatefulWidget {
 
 class _MyServicesPageState extends State<MyServicesPage>
     with SingleTickerProviderStateMixin {
- static const baseUrl = "http://localhost:5000";
+  // ✅ نستخدم ApiConfig عشان يشتغل Web + Android Emulator
+  static final String baseUrl = ApiConfig.baseUrl;
 
-void _showDialog(String title, String msg) {
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: Text(title),
-      content: Text(msg),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("OK"),
-        ),
-      ],
-    ),
-  );
-}
+  void _showDialog(String title, String msg) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: Text(msg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
 
   late TabController _tab;
   bool _loading = true;
@@ -64,36 +66,36 @@ void _showDialog(String title, String msg) {
     return prefs.getString('token') ?? '';
   }
 
-String _buildMeUrl() {
-  // ✅ هذا هو المسار الصحيح
-  final base = "$baseUrl/api/services/me";
+  String _buildMeUrl() {
+    // المسار الأساسي
+    final base = "$baseUrl/api/services/me";
 
-  final qp = <String, String>{
-    "page": "1",
-    "limit": "50",
-  };
+    final qp = <String, String>{
+      "page": "1",
+      "limit": "50",
+    };
 
-  if (_query.trim().isNotEmpty) qp["q"] = _query.trim();
+    if (_query.trim().isNotEmpty) qp["q"] = _query.trim();
 
-  switch (_tab.index) {
-    case 1:
-      qp["status"] = "ACTIVE";
-      qp["published"] = "true";
-      break;
-    case 2:
-      qp["status"] = "ACTIVE";
-      qp["published"] = "false";
-      break;
-    case 3:
-      qp["status"] = "ARCHIVED";
-      break;
+    switch (_tab.index) {
+      case 1:
+        qp["status"] = "ACTIVE";
+        qp["published"] = "true";
+        break;
+      case 2:
+        qp["status"] = "ACTIVE";
+        qp["published"] = "false";
+        break;
+      case 3:
+        qp["status"] = "ARCHIVED";
+        break;
+    }
+
+    final qs = qp.entries
+        .map((e) => "${e.key}=${Uri.encodeComponent(e.value)}")
+        .join("&");
+    return "$base?$qs";
   }
-
-  // ✅ هنا نضيف المعاملات للعنوان الصحيح
-  final qs = qp.entries.map((e) => "${e.key}=${Uri.encodeComponent(e.value)}").join("&");
-  return "$base?$qs"; // ✅ الآن الرابط صحيح 100%
-}
-
 
   Future<void> _fetchAll() async {
     try {
@@ -104,7 +106,10 @@ String _buildMeUrl() {
       final listUrl = _buildMeUrl();
       final res = await http.get(Uri.parse(listUrl), headers: headers);
 
-      final st = await http.get(Uri.parse("$baseUrl/api/services/me/stats"), headers: headers);
+      final st = await http.get(
+        Uri.parse("$baseUrl/api/services/me/stats"),
+        headers: headers,
+      );
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -126,56 +131,53 @@ String _buildMeUrl() {
     final t = await _token();
     final res = await http.patch(
       Uri.parse("$baseUrl/api/services/$id/publish"),
-      headers: {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'},
+      headers: {
+        'Authorization': 'Bearer $t',
+        'Content-Type': 'application/json'
+      },
       body: jsonEncode({'isPublished': value}),
     );
     if (res.statusCode == 200) {
-     _showDialog("Success", value ? "Service published" : "Service hidden");
-
+      _showDialog("Success", value ? "Service published" : "Service hidden");
       _fetchAll();
     } else {
       _showDialog("Error", res.body);
-
     }
   }
 
   Future<void> _archive(String id) async {
-  final t = await _token();
-  final res = await http.delete(
-    Uri.parse("$baseUrl/api/services/$id"),
-    headers: {'Authorization': 'Bearer $t'},
-  );
-  if (res.statusCode == 200) {
-    _showDialog("Archived", "Service archived");
-
-    _fetchAll();
-  } else {
-    _showDialog("Error", res.body);
-
+    final t = await _token();
+    final res = await http.delete(
+      Uri.parse("$baseUrl/api/services/$id"),
+      headers: {'Authorization': 'Bearer $t'},
+    );
+    if (res.statusCode == 200) {
+      _showDialog("Archived", "Service archived");
+      _fetchAll();
+    } else {
+      _showDialog("Error", res.body);
+    }
   }
-}
 
-// ✅ دالة جديدة لفك الأرشفة (إرجاع الخدمة إلى Hidden)
-Future<void> _unarchive(String id) async {
-  final t = await _token();
-  final res = await http.patch(
-    Uri.parse("$baseUrl/api/services/$id/unarchive"),
-    headers: {
-      'Authorization': 'Bearer $t',
-      'Content-Type': 'application/json'
-    },
-    body: jsonEncode({'status': 'ACTIVE', 'isPublished': false}),
-  );
+  // ✅ Unarchive
+  Future<void> _unarchive(String id) async {
+    final t = await _token();
+    final res = await http.patch(
+      Uri.parse("$baseUrl/api/services/$id/unarchive"),
+      headers: {
+        'Authorization': 'Bearer $t',
+        'Content-Type': 'application/json'
+      },
+      body: jsonEncode({'status': 'ACTIVE', 'isPublished': false}),
+    );
 
-  if (res.statusCode == 200) {
-   _showDialog("Restored", "Service unarchived");
-
-    _fetchAll();
-  } else {
-   _showDialog("Error", res.body);
-
+    if (res.statusCode == 200) {
+      _showDialog("Restored", "Service unarchived");
+      _fetchAll();
+    } else {
+      _showDialog("Error", res.body);
+    }
   }
-}
 
   Future<void> _duplicate(String id) async {
     final t = await _token();
@@ -184,12 +186,10 @@ Future<void> _unarchive(String id) async {
       headers: {'Authorization': 'Bearer $t'},
     );
     if (res.statusCode == 201) {
-     _showDialog("Duplicated", "Service duplicated");
-
+      _showDialog("Duplicated", "Service duplicated");
       _fetchAll();
     } else {
-     _showDialog("Error", res.body);
-
+      _showDialog("Error", res.body);
     }
   }
 
@@ -204,16 +204,21 @@ Future<void> _unarchive(String id) async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
         backgroundColor: const Color(0xFF62C6D9),
-        title: const Text("My Services", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        elevation: 0,
+        title: const Text(
+          "My Services",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
           controller: _tab,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
+          isScrollable: true,
           tabs: const [
             Tab(text: "All"),
             Tab(text: "Published"),
@@ -222,10 +227,12 @@ Future<void> _unarchive(String id) async {
           ],
         ),
         actions: [
-          IconButton(onPressed: _fetchAll, icon: const Icon(Icons.refresh, color: Colors.white)),
+          IconButton(
+            onPressed: _fetchAll,
+            icon: const Icon(Icons.refresh, color: Colors.white),
+          ),
         ],
       ),
-
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF62C6D9),
         icon: const Icon(Icons.add),
@@ -238,47 +245,66 @@ Future<void> _unarchive(String id) async {
           if (created == true) _fetchAll();
         },
       ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 900;
+          final maxWidth = isWide ? 1100.0 : constraints.maxWidth;
 
-      body: Column(
-        children: [
-          // 🔍 البحث
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              onChanged: _onSearchChanged,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: "Search by title or description...",
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-
-          if (_stats != null) _buildStatsRow(),
-
-          const SizedBox(height: 8),
-
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
-                    ? const Center(child: Text("No services found.", style: TextStyle(color: Colors.grey)))
-                    : RefreshIndicator(
-                        onRefresh: _fetchAll,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _items.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
-                          itemBuilder: (_, i) => _buildServiceCard(_items[i]),
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Column(
+                children: [
+                  // 🔍 Search
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: TextField(
+                      onChanged: _onSearchChanged,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        hintText: "Search by title or description...",
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
                       ),
-          ),
-        ],
+                    ),
+                  ),
+
+                  if (_stats != null) _buildStatsRow(),
+
+                  const SizedBox(height: 8),
+
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _items.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  "No services found.",
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _fetchAll,
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: _items.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 12),
+                                  itemBuilder: (_, i) =>
+                                      _buildServiceCard(_items[i], isWide),
+                                ),
+                              ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -287,19 +313,29 @@ Future<void> _unarchive(String id) async {
     final s = _stats!;
     Widget chip(String label, String value, IconData icon) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: const Color(0xFF62C6D9)),
             const SizedBox(width: 8),
-            Text("$label: ", style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              "$label: ",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             Text(value),
           ],
         ),
@@ -308,21 +344,51 @@ Future<void> _unarchive(String id) async {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(child: chip("Total", "${s['total']}", Icons.all_inbox)),
-          const SizedBox(width: 8),
-          Expanded(child: chip("Published", "${s['published']}", Icons.visibility)),
-          const SizedBox(width: 8),
-          Expanded(child: chip("Active", "${s['active']}", Icons.check_circle)),
-          const SizedBox(width: 8),
-          Expanded(child: chip("Archived", "${s['archived']}", Icons.archive)),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 600;
+
+          if (isNarrow) {
+            // ✅ على الشاشات الصغيرة: صفّين بدل واحد حتى ما يصير overflow
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: chip("Total", "${s['total']}", Icons.all_inbox)),
+                    const SizedBox(width: 8),
+                    Expanded(child: chip("Published", "${s['published']}", Icons.visibility)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(child: chip("Active", "${s['active']}", Icons.check_circle)),
+                    const SizedBox(width: 8),
+                    Expanded(child: chip("Archived", "${s['archived']}", Icons.archive)),
+                  ],
+                ),
+              ],
+            );
+          }
+
+          // ✅ على الشاشات الواسعة: صف واحد مثل SaaS dashboards
+          return Row(
+            children: [
+              Expanded(child: chip("Total", "${s['total']}", Icons.all_inbox)),
+              const SizedBox(width: 8),
+              Expanded(child: chip("Published", "${s['published']}", Icons.visibility)),
+              const SizedBox(width: 8),
+              Expanded(child: chip("Active", "${s['active']}", Icons.check_circle)),
+              const SizedBox(width: 8),
+              Expanded(child: chip("Archived", "${s['archived']}", Icons.archive)),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildServiceCard(Map<String, dynamic> sv) {
+  Widget _buildServiceCard(Map<String, dynamic> sv, bool isWide) {
     final String title = sv['title'] ?? 'Untitled';
     final String category = sv['category'] ?? '-';
     final double price = (sv['price'] ?? 0).toDouble();
@@ -337,7 +403,10 @@ Future<void> _unarchive(String id) async {
     final int bookings = (sv['bookingsCount'] ?? 0) as int;
 
     final List images = (sv['images'] ?? []) as List;
-    final String? cover = images.isNotEmpty ? images.first.toString() : null;
+    final String? rawCover =
+        images.isNotEmpty ? images.first.toString() : null;
+    final String? cover =
+        rawCover != null ? ApiConfig.fixAssetUrl(rawCover) : null;
 
     Color badgeColor;
     String badgeText;
@@ -358,23 +427,32 @@ Future<void> _unarchive(String id) async {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // صورة
           Container(
-            width: 90,
-            height: 90,
+            width: isWide ? 110 : 90,
+            height: isWide ? 110 : 90,
             decoration: BoxDecoration(
               color: const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(12),
-              image: (cover != null && cover.startsWith("http"))
-                  ? DecorationImage(image: NetworkImage(cover), fit: BoxFit.cover)
+              image: (cover != null && cover.isNotEmpty)
+                  ? DecorationImage(
+                      image: NetworkImage(cover),
+                      fit: BoxFit.cover,
+                    )
                   : null,
             ),
-            child: (cover == null || !cover.startsWith("http"))
+            child: (cover == null || cover.isEmpty)
                 ? const Icon(Icons.image, color: Colors.grey)
                 : null,
           ),
@@ -389,20 +467,42 @@ Future<void> _unarchive(String id) async {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: badgeColor.withOpacity(.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text(badgeText, style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        badgeText,
+                        style: TextStyle(
+                          color: badgeColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(category, style: const TextStyle(color: Colors.teal)),
+                Text(
+                  category,
+                  style: const TextStyle(
+                    color: Colors.teal,
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 8),
 
                 // معلومات سريعة
@@ -410,9 +510,11 @@ Future<void> _unarchive(String id) async {
                   spacing: 14,
                   runSpacing: 8,
                   children: [
-                    _kv(Icons.attach_money, "${price.toStringAsFixed(2)} $currency"),
+                    _kv(Icons.attach_money,
+                        "${price.toStringAsFixed(2)} $currency"),
                     _kv(Icons.schedule, "$duration min"),
-                    _kv(Icons.star, "${rating.toStringAsFixed(1)} ($ratingCount)"),
+                    _kv(Icons.star,
+                        "${rating.toStringAsFixed(1)} ($ratingCount)"),
                     _kv(Icons.event_available, "$bookings bookings"),
                   ],
                 ),
@@ -427,25 +529,36 @@ Future<void> _unarchive(String id) async {
                     _btn(Icons.remove_red_eye, "Preview", () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => ServicePublicPreviewPage(service: sv)),
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ServicePublicPreviewPage(service: sv),
+                        ),
                       );
                     }),
                     _btn(Icons.copy, "Duplicate", () => _duplicate(sv['_id'])),
                     _btn(Icons.edit, "Edit", () async {
                       final updated = await Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => ServiceFormPage(existing: sv)),
+                        MaterialPageRoute(
+                          builder: (_) => ServiceFormPage(existing: sv),
+                        ),
                       );
                       if (updated == true) _fetchAll();
                     }),
-                    _btn(isPublished ? Icons.visibility_off : Icons.visibility, isPublished ? "Hide" : "Publish",
-                        () => _togglePublish(sv['_id'], !isPublished)),
+                    _btn(
+                      isPublished
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                      isPublished ? "Hide" : "Publish",
+                      () => _togglePublish(sv['_id'], !isPublished),
+                    ),
                     _dangerBtn(
-  isArchived ? Icons.unarchive : Icons.archive,
-  isArchived ? "Unarchive" : "Archive",
-  () => isArchived ? _unarchive(sv['_id']) : _archive(sv['_id']),
-),
-
+                      isArchived ? Icons.unarchive : Icons.archive,
+                      isArchived ? "Unarchive" : "Archive",
+                      () => isArchived
+                          ? _unarchive(sv['_id'])
+                          : _archive(sv['_id']),
+                    ),
                   ],
                 ),
               ],
@@ -462,7 +575,10 @@ Future<void> _unarchive(String id) async {
       children: [
         Icon(icon, size: 16, color: Colors.grey[700]),
         const SizedBox(width: 4),
-        Text(text),
+        Text(
+          text,
+          style: const TextStyle(fontSize: 13),
+        ),
       ],
     );
   }
@@ -471,7 +587,14 @@ Future<void> _unarchive(String id) async {
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 18, color: const Color(0xFF62C6D9)),
-      label: Text(label, style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600)),
+      label: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF0F172A),
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+        ),
+      ),
     );
   }
 
@@ -479,7 +602,14 @@ Future<void> _unarchive(String id) async {
     return TextButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 18, color: Colors.redAccent),
-      label: Text(label, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+      label: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.redAccent,
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+        ),
+      ),
     );
   }
 }

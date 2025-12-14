@@ -14,6 +14,8 @@ import { sendNotificationToUser } from "../services/notificationSender.js";
 import { sendFCM } from "../utils/sendFCM.js";
 import User from "../models/user/user.model.js";
 
+import { updateExpertRatingByUserId } from "../services/expertRating.service.js";
+
 import Stripe from "stripe";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -436,6 +438,9 @@ export async function addCustomerReview(req, res) {
       service.ratingAvg = total / (service.ratingCount || 1);
 
       await service.save();
+      
+      // ⭐️ مهم: حدّث Rating البروفايل ككل بناءً على كل الخدمات
+      await updateExpertRatingByUserId(service.expert);
     }
 
     return res.json({
