@@ -1,4 +1,4 @@
-//user.modle 
+//src/models/user/user.modle 
 import mongoose from "mongoose";
 
 const roles = ["EXPERT", "CUSTOMER", "ADMIN"];
@@ -10,7 +10,18 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
     
-    fcmToken: { type: String, default: null },
+
+   fcmTokens: [
+      {
+    token: { type: String, index: true },
+    platform: { type: String, enum: ["android", "ios", "web"] },
+    deviceId: String,
+    userAgent: String,
+    lastSeenAt: { type: Date, default: Date.now },
+     },
+   ],
+
+
 
     // ✅ بيانات إضافية
     age: { type: Number, min: 1, max: 120 },

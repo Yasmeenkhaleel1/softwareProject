@@ -4,14 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:fl_chart/fl_chart.dart'; // 📈 للـ Charts
+import 'package:fl_chart/fl_chart.dart';
 
 import '../widgets/stat_card.dart';
 import 'edit_expert_profile_page.dart';
 import 'view_expert_profile_page.dart';
 import 'my_services_page.dart';
 import 'my_booking_tab.dart';
-import 'notifications_page.dart';
 import '../services/notifications_api.dart';
 import 'chat/conversations_page.dart';
 import 'expert_customers_page.dart';
@@ -27,34 +26,48 @@ class ExpertDashboardPage extends StatefulWidget {
 }
 
 class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
+  // =========== STATE ===========
+  // الإحصائيات
   int totalServices = 0;
   int totalBookings = 0;
   int totalClients = 0;
   double _wallet = 0;
 
+  // البروفايل
   bool _loadingMe = true;
   Map<String, dynamic>? _me;
 
+  // الإشعارات
   bool _notifOpen = false;
   bool _loadingNotifs = true;
   List<dynamic> _notifications = [];
 
-  // 🔹 حالة Stripe Connect
+  // Stripe Connect
   bool _stripeLoading = true;
   bool _stripeConnected = false;
   bool _payoutsEnabled = false;
   bool _detailsSubmitted = false;
 
-  // 0 = Overview | 1 = Profile | 2 = Services | 3 = Bookings | 4 = Customers | 5 = Availability | 6 = My Earnings
+  // التنقل
   int _mainTabIndex = 0;
+  int _mobileBottomNavIndex = 0;
+
+  // العرض
+  late bool _isMobile;
 
   @override
   void initState() {
     super.initState();
-    _loadMe();
-    _fetchNotifications();
-    _loadDashboardStats();
-    _loadStripeStatus();
+    _loadAllData();
+  }
+
+  Future<void> _loadAllData() async {
+    await Future.wait([
+      _loadMe(),
+      _loadDashboardStats(),
+      _fetchNotifications(),
+      _loadStripeStatus(),
+    ]);
   }
 
   Future<String> _getToken() async {
@@ -62,11 +75,10 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
     return prefs.getString('token') ?? '';
   }
 
+  // =========== API CALLS ===========
   Future<void> _loadDashboardStats() async {
     try {
       final token = await _getToken();
-
-      // 1) إحصائيات الداشبورد (services / bookings / clients)
       final dashRes = await http.get(
         Uri.parse("${ApiConfig.baseUrl}/api/expert/dashboard"),
         headers: {'Authorization': 'Bearer $token'},
@@ -74,19 +86,13 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
 
       if (dashRes.statusCode == 200) {
         final data = jsonDecode(dashRes.body);
-
         setState(() {
           totalServices = data['services'] ?? 0;
           totalBookings = data['bookings'] ?? 0;
           totalClients = data['clients'] ?? 0;
         });
-      } else {
-        debugPrint(
-          "Dashboard stats failed: ${dashRes.statusCode} ${dashRes.body}",
-        );
       }
 
-      // 2) الأرباح الفعلية (Wallet) من /api/expert/earnings/summary
       final earnRes = await http.get(
         Uri.parse("${ApiConfig.baseUrl}/api/expert/earnings/summary"),
         headers: {'Authorization': 'Bearer $token'},
@@ -94,9 +100,7 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
 
       if (earnRes.statusCode == 200) {
         final earnData = jsonDecode(earnRes.body);
-
         final walletRaw = earnData['totalNetToExpert'] ?? 0;
-
         setState(() {
           _wallet = (walletRaw is int)
               ? walletRaw.toDouble()
@@ -104,10 +108,6 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                   ? walletRaw
                   : double.tryParse(walletRaw.toString()) ?? 0.0;
         });
-      } else {
-        debugPrint(
-          "Earnings summary failed: ${earnRes.statusCode} ${earnRes.body}",
-        );
       }
     } catch (e) {
       debugPrint("Dashboard stats error: $e");
@@ -127,7 +127,6 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
           _loadingMe = false;
         });
       } else {
-        debugPrint("GET /me failed: ${res.statusCode} ${res.body}");
         setState(() => _loadingMe = false);
       }
     } catch (e) {
@@ -154,14 +153,63 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
         setState(() => _loadingNotifs = false);
       }
     } catch (e) {
-      debugPrint("❌ Error fetching notifications: $e");
+      debugPrint("Error fetching notifications: $e");
       setState(() => _loadingNotifs = false);
     }
   }
 
-  // =========================
-  //  Edit Profile logic
-  // =========================
+  Future<void> _loadStripeStatus() async {
+    try {
+      final token = await _getToken();
+      final res = await http.get(
+        Uri.parse("${ApiConfig.baseUrl}/api/payments/connect/status"),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _stripeConnected = data['connected'] == true;
+          _payoutsEnabled = data['payoutsEnabled'] == true;
+          _detailsSubmitted = data['detailsSubmitted'] == true;
+          _stripeLoading = false;
+        });
+      } else {
+        setState(() => _stripeLoading = false);
+      }
+    } catch (e) {
+      debugPrint("Stripe status error: $e");
+      setState(() => _stripeLoading = false);
+    }
+  }
+
+  Future<void> _openStripeOnboarding() async {
+    try {
+      final token = await _getToken();
+      final res = await http.post(
+        Uri.parse("${ApiConfig.baseUrl}/api/payments/connect/link"),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final url = data['url'] as String?;
+        if (url != null && url.isNotEmpty) {
+          final uri = Uri.parse(url);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Stripe connect link error: $e");
+    }
+  }
+
+  // =========== EDIT PROFILE LOGIC ===========
   Future<void> _onEditProfilePressed() async {
     if (_me == null) return;
 
@@ -219,13 +267,6 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
           _me!['draftProfile'] = data['draft'];
         });
         return data['draft'];
-      } else {
-        debugPrint(
-          "Create draft from approved failed: ${res.statusCode} ${res.body}",
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("تعذّر إنشاء مسودة للتعديل")),
-        );
       }
     } catch (e) {
       debugPrint("createDraftFromApproved err: $e");
@@ -246,11 +287,6 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
           _me!['draftProfile'] = data['draft'];
         });
         return data['draft'];
-      } else {
-        debugPrint("Create empty draft failed: ${res.statusCode} ${res.body}");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("تعذّر إنشاء مسودة جديدة")),
-        );
       }
     } catch (e) {
       debugPrint("createEmptyDraft err: $e");
@@ -268,150 +304,79 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
     _loadMe();
   }
 
-  // =========================
-  //    Stripe Connect logic
-  // =========================
-  Future<void> _loadStripeStatus() async {
-    try {
-      final token = await _getToken();
-      final res = await http.get(
-        Uri.parse("${ApiConfig.baseUrl}/api/payments/connect/status"),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+  // =========== NAVIGATION ===========
+  void _onMobileBottomNavTapped(int index) {
+    setState(() {
+      _mobileBottomNavIndex = index;
+      _mainTabIndex = index;
+    });
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+    final routes = [
+      () => null, // 0 - Overview (يبقى في نفس الصفحة)
+      () => const ViewExpertProfilePage(),
+      () => const MyServicesPage(),
+      () => const MyBookingTab(),
+      () => const ExpertCustomersPage(),
+      () => const ExpertEarningsPage(),
+      () => const MyAvailabilityPage(),
+    ];
+
+    if (index > 0 && index < routes.length) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => routes[index]()!),
+      ).then((_) {
         setState(() {
-          _stripeConnected = data['connected'] == true;
-          _payoutsEnabled = data['payoutsEnabled'] == true;
-          _detailsSubmitted = data['detailsSubmitted'] == true;
-          _stripeLoading = false;
+          _mobileBottomNavIndex = 0;
+          _mainTabIndex = 0;
         });
-      } else {
-        debugPrint("Stripe status failed: ${res.statusCode} ${res.body}");
-        setState(() => _stripeLoading = false);
-      }
-    } catch (e) {
-      debugPrint("Stripe status error: $e");
-      setState(() => _stripeLoading = false);
+      });
     }
   }
 
-  Future<void> _openStripeOnboarding() async {
-    try {
-      final token = await _getToken();
-      final res = await http.post(
-        Uri.parse("${ApiConfig.baseUrl}/api/payments/connect/link"),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
+  void _onWebTabTapped(int index) {
+    setState(() => _mainTabIndex = index);
+    
+    final routes = [
+      () => null, // 0 - Overview
+      () => const ViewExpertProfilePage(),
+      () => const MyServicesPage(),
+      () => const MyBookingTab(),
+      () => const ExpertCustomersPage(),
+      () => const ExpertEarningsPage(),
+      () => const MyAvailabilityPage(),
+    ];
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final url = data['url'] as String?;
-        if (url != null && url.isNotEmpty) {
-          final uri = Uri.parse(url);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(
-              uri,
-              mode: LaunchMode.externalApplication,
-            );
-          } else {
-            debugPrint("Cannot launch Stripe onboarding URL");
-          }
-        }
-      } else {
-        debugPrint("Stripe connect link failed: ${res.statusCode} ${res.body}");
-      }
-    } catch (e) {
-      debugPrint("Stripe connect link error: $e");
+    if (index > 0 && index < routes.length) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => routes[index]()!),
+      ).then((_) {
+        setState(() => _mainTabIndex = 0);
+      });
     }
   }
 
-  // =========================
-  //         UI
-  // =========================
+  // =========== UI BUILD ===========
   @override
   Widget build(BuildContext context) {
-    final appBar = AppBar(
-      elevation: 0,
-      backgroundColor: const Color(0xFF3CB8D4),
-      titleSpacing: 24,
-      title: Row(
-        children: const [
-          Icon(Icons.auto_awesome, color: Colors.white),
-          SizedBox(width: 8),
-          Text(
-            'Expert Workspace',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          tooltip: "Messages",
-          icon: const Icon(Icons.message_outlined, color: Colors.white),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ConversationsPage()),
-            );
-          },
-        ),
-        Stack(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none, color: Colors.white),
-              onPressed: () async {
-                await NotificationsAPI.markAllAsRead();
-                setState(() => _notifOpen = !_notifOpen);
-                _fetchNotifications();
-              },
-            ),
-            Positioned(
-              right: 6,
-              top: 6,
-              child: FutureBuilder(
-                future: NotificationsAPI.getUnreadCount(),
-                builder: (context, snap) {
-                  if (!snap.hasData || snap.data == 0) {
-                    return const SizedBox();
-                  }
-                  return Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      "${snap.data}",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(width: 8),
-      ],
+    _isMobile = MediaQuery.of(context).size.width < 768;
+    
+    // تحضير بيانات البروفايل
+    final profileData = _getProfileData();
+    
+    return Scaffold(
+      appBar: _buildAppBar(),
+      body: _buildBody(profileData),
+      bottomNavigationBar: _isMobile ? _buildMobileBottomNav() : null,
     );
+  }
 
-    // ===== تجهيز بيانات البروفايل + التقييم =====
-    String displayName = "Unknown Expert";
+  Map<String, dynamic> _getProfileData() {
+    String displayName = "Expert";
     String specialization = "";
     String bio = "";
     String? imageUrl;
-
     double ratingAvg = 0.0;
     int ratingCount = 0;
 
@@ -443,209 +408,162 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
           profile?['bio'] ??
           "") as String;
 
-      imageUrl = (approved?['profileImageUrl'] ??
+      final String? rawImageUrl = (approved?['profileImageUrl'] ??
           pending?['profileImageUrl'] ??
           draft?['profileImageUrl'] ??
           profile?['profileImageUrl']) as String?;
+
+      imageUrl = rawImageUrl != null && rawImageUrl.isNotEmpty
+          ? ApiConfig.fixAssetUrl(rawImageUrl)
+          : null;
 
       final num rawRating = (active['ratingAvg'] ?? 0) as num;
       ratingAvg = rawRating.toDouble();
       ratingCount = (active['ratingCount'] ?? 0) as int;
     }
 
-    // ✅ إصلاح رابط الصورة
-    String avatarUrl = '';
-    if (imageUrl != null && imageUrl!.isNotEmpty) {
-      avatarUrl = ApiConfig.fixAssetUrl(imageUrl);
-    }
+    return {
+      'displayName': displayName,
+      'specialization': specialization,
+      'bio': bio,
+      'imageUrl': imageUrl,
+      'ratingAvg': ratingAvg,
+      'ratingCount': ratingCount,
+    };
+  }
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final bool isDesktop = screenWidth >= 1100;
-    final maxWidth =
-        isDesktop ? 1300.0 : (screenWidth > 1200 ? 1100.0 : screenWidth * 0.95);
-
-    return Scaffold(
-      appBar: appBar,
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFFF4F8FC),
-                  Color(0xFFE5F4F7),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      backgroundColor: const Color(0xFF3CB8D4),
+      titleSpacing: 24,
+      title: Row(
+        children: const [
+          Icon(Icons.auto_awesome, color: Colors.white),
+          SizedBox(width: 8),
+          Text(
+            'Expert ',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
             ),
           ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: isDesktop
-                    ? _buildDesktopLayout(
-                        avatarUrl: avatarUrl,
-                        displayName: displayName,
-                        specialization: specialization,
-                        bio: bio,
-                        ratingAvg: ratingAvg,
-                        ratingCount: ratingCount,
-                      )
-                    : _buildMobileLayout(
-                        avatarUrl: avatarUrl,
-                        displayName: displayName,
-                        specialization: specialization,
-                        bio: bio,
-                        ratingAvg: ratingAvg,
-                        ratingCount: ratingCount,
-                      ),
-              ),
-            ),
-          ),
-
-          if (_notifOpen) _buildNotificationsOverlay(context),
         ],
       ),
-    );
-  }
-
-  // =========================
-  //  Responsive Layouts
-  // =========================
-
-  Widget _buildMobileLayout({
-    required String avatarUrl,
-    required String displayName,
-    required String specialization,
-    required String bio,
-    required double ratingAvg,
-    required int ratingCount,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildProfileCard(
-          avatarUrl: avatarUrl,
-          displayName: displayName,
-          specialization: specialization,
-          bio: bio,
-          ratingAvg: ratingAvg,
-          ratingCount: ratingCount,
-        ),
-        const SizedBox(height: 16),
-        if (!_stripeLoading) _buildStripeBanner(),
-        if (!_stripeLoading) const SizedBox(height: 16),
-        _buildMainTabs(),
-        const SizedBox(height: 24),
-        const Text(
-          "Overview",
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF0F172A),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.message_outlined, color: Colors.white),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ConversationsPage()),
           ),
         ),
-        const SizedBox(height: 12),
-        _buildStatsGrid(),
-        const SizedBox(height: 24),
-        _buildEarningsChartCard(),
-        const SizedBox(height: 24),
-        _buildQuickActionsCard(),
+        _buildNotificationsButton(),
+        const SizedBox(width: 8),
       ],
     );
   }
 
-  Widget _buildDesktopLayout({
-    required String avatarUrl,
-    required String displayName,
-    required String specialization,
-    required String bio,
-    required double ratingAvg,
-    required int ratingCount,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildNotificationsButton() {
+    return Stack(
       children: [
-        _buildProfileCard(
-          avatarUrl: avatarUrl,
-          displayName: displayName,
-          specialization: specialization,
-          bio: bio,
-          ratingAvg: ratingAvg,
-          ratingCount: ratingCount,
+        IconButton(
+          icon: const Icon(Icons.notifications_none, color: Colors.white),
+          onPressed: () async {
+            await NotificationsAPI.markAllAsRead();
+            setState(() => _notifOpen = !_notifOpen);
+            _fetchNotifications();
+          },
         ),
-        const SizedBox(height: 16),
-        if (!_stripeLoading) _buildStripeBanner(),
-        if (!_stripeLoading) const SizedBox(height: 20),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // يسار: Tabs + Stats + Quick actions
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildMainTabs(),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "Overview",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
-                    ),
+        Positioned(
+          right: 6,
+          top: 6,
+          child: FutureBuilder(
+            future: NotificationsAPI.getUnreadCount(),
+            builder: (context, snap) {
+              if (!snap.hasData || snap.data == 0) {
+                return const SizedBox();
+              }
+              return Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  "${snap.data}",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 12),
-                  _buildStatsGrid(),
-                  const SizedBox(height: 24),
-                  _buildQuickActionsCard(),
-                ],
-              ),
-            ),
-            const SizedBox(width: 24),
-            // يمين: Earnings chart + Info card
-            Expanded(
-              flex: 2,
-              child: Column(
-                children: [
-                  _buildEarningsChartCard(),
-                  const SizedBox(height: 16),
-                  _buildInfoCard(),
-                ],
-              ),
-            ),
-          ],
+                ),
+              );
+            },
+          ),
         ),
       ],
     );
   }
 
-  // =========================
-  //  Reusable UI Sections
-  // =========================
+  Widget _buildBody(Map<String, dynamic> profileData) {
+    return Stack(
+      children: [
+        // خلفية
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFF4F8FC), Color(0xFFE5F4F7)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+        ),
+        
+        // المحتوى
+        SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 1200),
+              child: Column(
+                children: [
+                  // بطاقة البروفايل
+                  _buildProfileCard(profileData),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Stripe Banner
+                  if (!_stripeLoading) _buildStripeBanner(),
+                  
+                  // التبويبات
+                  if (!_isMobile) ...[
+                    const SizedBox(height: 20),
+                    _buildWebTabs(),
+                  ],
+                  
+                  // المحتوى الرئيسي
+                  const SizedBox(height: 24),
+                  _buildMainContent(profileData),
+                ],
+              ),
+            ),
+          ),
+        ),
+        
+        // الإشعارات
+        if (_notifOpen) _buildNotificationsOverlay(),
+      ],
+    );
+  }
 
-  Widget _buildProfileCard({
-    required String avatarUrl,
-    required String displayName,
-    required String specialization,
-    required String bio,
-    required double ratingAvg,
-    required int ratingCount,
-  }) {
+  Widget _buildProfileCard(Map<String, dynamic> profileData) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFFFFFFFF),
-            Color(0xFFEAF9FC),
-          ],
+          colors: [Color(0xFFFFFFFF), Color(0xFFEAF9FC)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -656,22 +574,22 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
             offset: const Offset(0, 10),
           ),
         ],
-        border: Border.all(
-          color: const Color(0xFFD7E3EE),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFD7E3EE), width: 1),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // الصورة
           CircleAvatar(
-            radius: 38,
-            backgroundImage: avatarUrl.isNotEmpty
-                ? NetworkImage(avatarUrl)
-                : const AssetImage('assets/images/experts.png')
-                    as ImageProvider,
+            radius: _isMobile ? 30 : 38,
+            backgroundImage: profileData['imageUrl'] != null
+                ? NetworkImage(profileData['imageUrl']!)
+                : const AssetImage('assets/images/experts.png') as ImageProvider,
           ),
+          
           const SizedBox(width: 18),
+          
+          // المعلومات
           Expanded(
             child: _loadingMe
                 ? const LinearProgressIndicator(minHeight: 2)
@@ -679,33 +597,32 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        displayName,
-                        style: const TextStyle(
-                          fontSize: 20,
+                        profileData['displayName'],
+                        style: TextStyle(
+                          fontSize: _isMobile ? 18 : 20,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
+                          color: const Color(0xFF0F172A),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      if (specialization.isNotEmpty)
+                      
+                      if (profileData['specialization'].isNotEmpty) ...[
+                        const SizedBox(height: 4),
                         Text(
-                          specialization,
+                          profileData['specialization'],
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: _isMobile ? 13 : 14,
                             color: Colors.grey[700],
                           ),
                         ),
+                      ],
+                      
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Icon(
-                            Icons.star,
-                            size: 18,
-                            color: Colors.amber,
-                          ),
+                          const Icon(Icons.star, size: 18, color: Colors.amber),
                           const SizedBox(width: 4),
                           Text(
-                            ratingAvg.toStringAsFixed(1),
+                            profileData['ratingAvg'].toStringAsFixed(1),
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
@@ -714,7 +631,7 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            "/5  ·  $ratingCount reviews",
+                            "/5  ·  ${profileData['ratingCount']} reviews",
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.grey[600],
@@ -722,14 +639,15 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                           ),
                         ],
                       ),
-                      if (bio.isNotEmpty) ...[
+                      
+                      if (profileData['bio'].isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
-                          bio,
-                          maxLines: 3,
+                          profileData['bio'],
+                          maxLines: _isMobile ? 2 : 3,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: _isMobile ? 12 : 13,
                             color: Colors.grey[600],
                           ),
                         ),
@@ -737,31 +655,34 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                     ],
                   ),
           ),
+          
           const SizedBox(width: 16),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF3CB8D4),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 22,
-                vertical: 12,
+          
+          // زر التعديل
+          if (!_isMobile)
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF3CB8D4),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
+              onPressed: _loadingMe ? null : _onEditProfilePressed,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.w600)),
+            )
+          else
+            IconButton(
+              onPressed: _loadingMe ? null : _onEditProfilePressed,
+              icon: const Icon(Icons.edit, color: Color(0xFF3CB8D4)),
             ),
-            onPressed: _loadingMe ? null : _onEditProfilePressed,
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text(
-              'Edit Profile',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildMainTabs() {
+  Widget _buildWebTabs() {
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
@@ -774,331 +695,402 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(
-          color: const Color(0xFFE0E7F1),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFE0E7F1), width: 1),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            SizedBox(
-              width: 120,
-              child: _MainNavButton(
-                title: "Overview",
-                icon: Icons.insights_outlined,
-                isActive: _mainTabIndex == 0,
-                onTap: () {
-                  setState(() => _mainTabIndex = 0);
-                },
-              ),
-            ),
-            SizedBox(
-              width: 120,
-              child: _MainNavButton(
-                title: "Profile",
-                icon: Icons.person_outline,
-                isActive: _mainTabIndex == 1,
-                onTap: () {
-                  setState(() => _mainTabIndex = 1);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ViewExpertProfilePage(),
+      child: Row(
+        children: [
+          _buildTabButton(
+            title: "Overview",
+            icon: Icons.insights_outlined,
+            index: 0,
+          ),
+          _buildTabButton(
+            title: "Profile",
+            icon: Icons.person_outline,
+            index: 1,
+          ),
+          _buildTabButton(
+            title: "Services",
+            icon: Icons.home_repair_service_outlined,
+            index: 2,
+          ),
+          _buildTabButton(
+            title: "Bookings",
+            icon: Icons.event_available_outlined,
+            index: 3,
+          ),
+          _buildTabButton(
+            title: "Customers",
+            icon: Icons.group_outlined,
+            index: 4,
+          ),
+          _buildTabButton(
+            title: "Earnings",
+            icon: Icons.attach_money_outlined,
+            index: 5,
+          ),
+          _buildTabButton(
+            title: "Availability",
+            icon: Icons.schedule_outlined,
+            index: 6,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabButton({
+    required String title,
+    required IconData icon,
+    required int index,
+  }) {
+    final isActive = _mainTabIndex == index;
+    
+    return Expanded(
+      child: InkWell(
+        onTap: () => _onWebTabTapped(index),
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            gradient: isActive
+                ? const LinearGradient(
+                    colors: [Color(0xFF62C6D9), Color(0xFF2F8CA5)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isActive ? null : Colors.white,
+            border: isActive ? null : Border.all(color: const Color(0xFFD3E3EC)),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                  ).then((_) {
-                    setState(() => _mainTabIndex = 0);
-                  });
-                },
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isActive ? Colors.white : const Color(0xFF285E6E).withOpacity(0.7),
               ),
-            ),
-            SizedBox(
-              width: 130,
-              child: _MainNavButton(
-                title: "Services",
-                icon: Icons.home_repair_service_outlined,
-                isActive: _mainTabIndex == 2,
-                onTap: () {
-                  setState(() => _mainTabIndex = 2);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyServicesPage(),
-                    ),
-                  ).then((_) {
-                    setState(() => _mainTabIndex = 0);
-                  });
-                },
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: TextStyle(
+                  color: isActive ? Colors.white : const Color(0xFF285E6E).withOpacity(0.85),
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
-            ),
-            SizedBox(
-              width: 130,
-              child: _MainNavButton(
-                title: "Bookings",
-                icon: Icons.event_available_outlined,
-                isActive: _mainTabIndex == 3,
-                onTap: () {
-                  setState(() => _mainTabIndex = 3);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyBookingTab(),
-                    ),
-                  ).then((_) {
-                    setState(() => _mainTabIndex = 0);
-                  });
-                },
-              ),
-            ),
-            SizedBox(
-              width: 130,
-              child: _MainNavButton(
-                title: "Customers",
-                icon: Icons.group_outlined,
-                isActive: _mainTabIndex == 4,
-                onTap: () {
-                  setState(() => _mainTabIndex = 4);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ExpertCustomersPage(),
-                    ),
-                  ).then((_) {
-                    setState(() => _mainTabIndex = 0);
-                  });
-                },
-              ),
-            ),
-            SizedBox(
-              width: 150,
-              child: _MainNavButton(
-                title: "My Availability",
-                icon: Icons.schedule_outlined,
-                isActive: _mainTabIndex == 5,
-                onTap: () {
-                  setState(() => _mainTabIndex = 5);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyAvailabilityPage(),
-                    ),
-                  ).then((_) {
-                    setState(() => _mainTabIndex = 0);
-                  });
-                },
-              ),
-            ),
-            SizedBox(
-              width: 140,
-              child: _MainNavButton(
-                title: "My Earnings",
-                icon: Icons.attach_money_outlined,
-                isActive: _mainTabIndex == 6,
-                onTap: () {
-                  setState(() => _mainTabIndex = 6);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ExpertEarningsPage(),
-                    ),
-                  ).then((_) {
-                    setState(() => _mainTabIndex = 0);
-                  });
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStatsGrid() {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final w = c.maxWidth;
-        final cross = w > 1100
-            ? 4
-            : w > 800
-                ? 4
-                : w > 600
-                    ? 2
-                    : 1;
-        return GridView.count(
-          crossAxisCount: cross,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
+  Widget _buildMainContent(Map<String, dynamic> profileData) {
+    if (_isMobile) {
+      return _buildMobileContent();
+    } else {
+      return _buildDesktopContent();
+    }
+  }
+
+  Widget _buildMobileContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // الإحصائيات
+        const Text(
+          "Dashboard Overview",
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildStatsGrid(),
+        
+        // Quick Actions
+        const SizedBox(height: 24),
+        _buildMobileQuickActions(),
+        
+        // Earnings Chart
+        const SizedBox(height: 24),
+        _buildEarningsChartCard(),
+        
+        // Performance Tips
+        const SizedBox(height: 24),
+        _buildInfoCard(),
+      ],
+    );
+  }
+
+  Widget _buildDesktopContent() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // العمود الأيسر
+        Expanded(
+          flex: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Overview",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildStatsGrid(),
+              const SizedBox(height: 24),
+              _buildQuickActionsCard(),
+            ],
+          ),
+        ),
+        
+        const SizedBox(width: 24),
+        
+        // العمود الأيمن
+        Expanded(
+          flex: 2,
+          child: Column(
+            children: [
+              _buildEarningsChartCard(),
+              const SizedBox(height: 16),
+              _buildInfoCard(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+ Widget _buildStatsGrid() {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      int crossAxisCount;
+      double childAspectRatio;
+      EdgeInsets padding;
+      
+      if (_isMobile) {
+        // 📱 موبايل: 2x2 مع حجم أصغر
+        crossAxisCount = 2;
+        childAspectRatio = 1.2; // جعلهم أكثر مربعية
+        padding = const EdgeInsets.symmetric(horizontal: 8); // تقليل المساحة الجانبية
+      } else if (width >= 1100) {
+        // 💻 ديسكتوب كبير
+        crossAxisCount = 4;
+        childAspectRatio = 1.25;
+        padding = EdgeInsets.zero;
+      } else if (width >= 800) {
+        // 📱 تابلت
+        crossAxisCount = 3;
+        childAspectRatio = 1.3;
+        padding = EdgeInsets.zero;
+      } else {
+        // 📱 موبايل صغير جداً
+        crossAxisCount = 2;
+        childAspectRatio = 1.1;
+        padding = const EdgeInsets.symmetric(horizontal: 4);
+      }
+      
+      return Padding(
+        padding: padding,
+        child: GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: _isMobile ? 12 : 16, // تقليل المسافة في الجوال
+          mainAxisSpacing: _isMobile ? 12 : 16,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: childAspectRatio,
           children: [
-            StatCard(
+            // استخدام StatCard معدل للجوال
+            _buildMobileStatCard(
               title: 'Services',
               value: '$totalServices',
               icon: Icons.home_repair_service,
             ),
-            StatCard(
+            _buildMobileStatCard(
               title: 'Clients',
               value: '$totalClients',
               icon: Icons.group,
             ),
-            StatCard(
+            _buildMobileStatCard(
               title: 'Bookings',
               value: '$totalBookings',
               icon: Icons.event_available,
             ),
-            StatCard(
+            _buildMobileStatCard(
               title: 'Wallet',
               value: '\$${_wallet.toStringAsFixed(2)}',
               icon: Icons.account_balance_wallet,
             ),
           ],
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 
-  Widget _buildEarningsChartCard() {
-  // Trend بسيط مبني على قيمة الـ Wallet الحالية (شكل فقط، بدون داتا حقيقية زمنية)
-  final double base = _wallet <= 0 ? 50 : _wallet;
-  final spots = [
-    FlSpot(0, base * 0.35),
-    FlSpot(1, base * 0.55),
-    FlSpot(2, base * 0.7),
-    FlSpot(3, base),
-  ];
-
+// 📱 نسخة معدلة من StatCard للجوال
+Widget _buildMobileStatCard({
+  required String title,
+  required String value,
+  required IconData icon,
+}) {
   return Container(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(12),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 6),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
         ),
       ],
-      border: Border.all(color: const Color(0xFFE0E7F1)),
+      border: Border.all(
+        color: const Color(0xFFE5F4F7),
+        width: 1,
+      ),
     ),
     child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "Earnings trend",
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF0F172A),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          "Total wallet: \$${_wallet.toStringAsFixed(2)}",
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey[700],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 180,
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: false,
-                getDrawingHorizontalLine: (value) => FlLine(
-                  color: Colors.grey.withOpacity(0.15),
-                  strokeWidth: 1,
-                ),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3CB8D4).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 40,
-                    getTitlesWidget: (value, meta) => Text(
-                      "\$${value.toInt()}",
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    getTitlesWidget: (value, meta) {
-                      String label = '';
-                      final v = value.toInt();
-                      if (v == 0) {
-                        label = 'Week 1';
-                      } else if (v == 1) {
-                        label = 'Week 2';
-                      } else if (v == 2) {
-                        label = 'Week 3';
-                      } else if (v == 3) {
-                        label = 'Now';
-                      }
-                      return Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey[600],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
+              child: Icon(
+                icon,
+                size: 16,
+                color: const Color(0xFF3CB8D4),
               ),
-              borderData: FlBorderData(show: false),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  barWidth: 3,
-                  // نستخدم gradient عشان نضمن التوافق
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF3CB8D4),
-                      Color(0xFF285E6E),
-                    ],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  // في 0.66.0 خليه بسيط بدون dotColor / dotSize
-                  dotData: FlDotData(
-                    show: true,
-                  ),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        const Color(0xFF3CB8D4).withOpacity(0.4),
-                        const Color(0xFF3CB8D4).withOpacity(0.02),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
             ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0F172A),
           ),
         ),
       ],
     ),
   );
 }
+  Widget _buildMobileQuickActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Quick Actions',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 3,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _buildQuickActionButton(
+              icon: Icons.add,
+              label: 'New Service',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyServicesPage()),
+              ),
+            ),
+            _buildQuickActionButton(
+              icon: Icons.calendar_today,
+              label: 'Schedule',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyBookingTab()),
+              ),
+            ),
+            _buildQuickActionButton(
+              icon: Icons.chat,
+              label: 'Messages',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ConversationsPage()),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF3CB8D4), size: 24),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(fontSize: 12), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildQuickActionsCard() {
     return Container(
@@ -1146,50 +1138,34 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
               _QuickActionChip(
                 icon: Icons.home_repair_service_outlined,
                 label: "Manage services",
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyServicesPage(),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyServicesPage()),
+                ),
               ),
               _QuickActionChip(
                 icon: Icons.event_available_outlined,
                 label: "View bookings",
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyBookingTab(),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyBookingTab()),
+                ),
               ),
               _QuickActionChip(
                 icon: Icons.attach_money_outlined,
                 label: "Check earnings",
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ExpertEarningsPage(),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ExpertEarningsPage()),
+                ),
               ),
               _QuickActionChip(
                 icon: Icons.schedule_outlined,
                 label: "Edit availability",
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyAvailabilityPage(),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyAvailabilityPage()),
+                ),
               ),
             ],
           ),
@@ -1197,6 +1173,130 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
       ),
     );
   }
+
+Widget _buildEarningsChartCard() {
+  final double base = _wallet <= 0 ? 50 : _wallet;
+  final spots = [
+    FlSpot(0, base * 0.35),
+    FlSpot(1, base * 0.55),
+    FlSpot(2, base * 0.7),
+    FlSpot(3, base),
+  ];
+
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 6),
+        ),
+      ],
+      border: Border.all(color: const Color(0xFFE0E7F1)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Earnings trend",
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Total wallet: \$${_wallet.toStringAsFixed(2)}",
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: _isMobile ? 150 : 180,
+          child: LineChart(
+            LineChartData(
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                getDrawingHorizontalLine: (value) => FlLine(
+                  color: Colors.grey.withOpacity(0.15),
+                  strokeWidth: 1,
+                ),
+              ),
+              titlesData: FlTitlesData(
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 40,
+                    getTitlesWidget: (value, meta) => Text(
+                      "\$${value.toInt()}",
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) {
+                      final labels = ['Week 1', 'Week 2', 'Week 3', 'Now'];
+                      final index = value.toInt();
+                      if (index >= 0 && index < labels.length) {
+                        return Text(
+                          labels[index],
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                          ),
+                        );
+                      }
+                      return const SizedBox();
+                    },
+                  ),
+                ),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              ),
+              borderData: FlBorderData(show: false),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  barWidth: 3,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF3CB8D4), Color(0xFF285E6E)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  dotData: FlDotData(show: true),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        const Color(0xFF3CB8D4).withOpacity(0.4),
+                        const Color(0xFF3CB8D4).withOpacity(0.02),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildInfoCard() {
     return Container(
@@ -1254,7 +1354,6 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   }
 
   Widget _buildStripeBanner() {
-    // لو كل شيء تمام، نعرض شارة صغيرة فقط
     if (_stripeConnected && _payoutsEnabled) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1283,13 +1382,11 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
     }
 
     final bool hasStarted = _stripeConnected && !_payoutsEnabled;
-
     final String title = hasStarted
         ? "Complete your Stripe setup"
         : "Connect your payout account";
-
     final String subtitle = hasStarted
-        ? "You’ve started onboarding with Stripe. Please complete the remaining steps to receive payouts."
+        ? "You've started onboarding with Stripe. Please complete the remaining steps to receive payouts."
         : "Connect your account with Stripe to receive your session earnings securely.";
 
     return Container(
@@ -1315,10 +1412,8 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
               color: const Color(0xFF3CB8D4).withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.account_balance_wallet_outlined,
-              color: Color(0xFF3CB8D4),
-            ),
+            child: const Icon(Icons.account_balance_wallet_outlined,
+                color: Color(0xFF3CB8D4)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1336,10 +1431,7 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[700],
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                 ),
               ],
             ),
@@ -1349,8 +1441,7 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF3CB8D4),
               elevation: 0,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(999),
               ),
@@ -1359,10 +1450,7 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
             icon: const Icon(Icons.open_in_new, size: 18, color: Colors.white),
             label: Text(
               hasStarted ? "Continue" : "Connect",
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -1370,12 +1458,52 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
     );
   }
 
-  Widget _buildNotificationsOverlay(BuildContext context) {
+  Widget _buildMobileBottomNav() {
+    return BottomNavigationBar(
+      currentIndex: _mobileBottomNavIndex,
+      onTap: _onMobileBottomNavTapped,
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: const Color(0xFF3CB8D4),
+      unselectedItemColor: Colors.grey[600],
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard),
+          label: 'Overview',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.work),
+          label: 'Services',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.event),
+          label: 'Bookings',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.group),
+          label: 'Customers',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.account_balance_wallet),
+          label: 'Earnings',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.schedule),
+          label: 'Availability',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotificationsOverlay() {
     return Positioned(
-      right: 30,
+      right: _isMobile ? 16 : 30,
       top: 80,
       child: Container(
-        width: 320,
+        width: _isMobile ? MediaQuery.of(context).size.width * 0.9 : 320,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1389,17 +1517,9 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
           ],
         ),
         child: _loadingNotifs
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(),
-                ),
-              )
+            ? const Center(child: CircularProgressIndicator())
             : _notifications.isEmpty
-                ? const Text(
-                    "No new notifications",
-                    style: TextStyle(color: Colors.grey),
-                  )
+                ? const Text("No new notifications", style: TextStyle(color: Colors.grey))
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: _notifications.take(5).map((notif) {
@@ -1424,7 +1544,7 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.notifications, color: base),
+                            Icon(Icons.notifications, color: base, size: 20),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
@@ -1434,13 +1554,13 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                                     title,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 15,
+                                      fontSize: 14,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     message,
-                                    style: const TextStyle(fontSize: 13),
+                                    style: const TextStyle(fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -1455,104 +1575,8 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   }
 }
 
-// ====================
-//  زر التبويب الرئيسي
-// ====================
-class _MainNavButton extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final bool isActive;
-  final VoidCallback onTap;
+// =========== Helper Widgets ===========
 
-  const _MainNavButton({
-    required this.title,
-    required this.icon,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final Color activeColor = const Color(0xFF285E6E);
-    final Color borderColor = const Color(0xFFD3E3EC);
-
-    if (isActive) {
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF62C6D9), Color(0xFF2F8CA5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 18, color: Colors.white),
-                const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          color: Colors.white,
-          border: Border.all(color: borderColor),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: activeColor.withOpacity(0.7)),
-            const SizedBox(width: 6),
-            Text(
-              title,
-              style: TextStyle(
-                color: activeColor.withOpacity(0.85),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ====================
-//  Quick Action Chip
-// ====================
 class _QuickActionChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1574,9 +1598,7 @@ class _QuickActionChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.08),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.25),
-          ),
+          border: Border.all(color: Colors.white.withOpacity(0.25)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1598,9 +1620,6 @@ class _QuickActionChip extends StatelessWidget {
   }
 }
 
-// ====================
-//  Info Row
-// ====================
 class _InfoRow extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -1625,11 +1644,7 @@ class _InfoRow extends StatelessWidget {
             color: color.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: color,
-          ),
+          child: Icon(icon, size: 18, color: color),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -1647,10 +1662,7 @@ class _InfoRow extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[700],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
               ),
             ],
           ),

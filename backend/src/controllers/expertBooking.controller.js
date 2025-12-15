@@ -7,7 +7,7 @@ import { ensureOwnership } from "../utils/ownership.js"
 
 import { createZoomMeeting } from "../services/zoom.service.js";
 
-import { sendNotificationToUser } from "../services/notificationSender.js";
+
 
 import mongoose from "mongoose";
 import {
@@ -260,15 +260,7 @@ export const acceptBooking = async (req, res) => {
 
     await booking.save();
 
-    // 🔔 إشعار (لو حابة ترجعي تشغليه لاحقاً)
-    /*
-    await sendNotificationToUser(
-      booking.customer,
-      "✔ Booking Accepted",
-      `Your booking (${booking.code}) has been accepted successfully.`
-    );
-    */
-
+  
     return res.json({
       success: true,
       message:
@@ -308,11 +300,7 @@ export const declineBooking = async (req, res) => {
     booking.timeline.push({ by: "EXPERT", action: "DECLINED" });
     await booking.save();
 
-      /*await sendNotificationToUser(
-      booking.customer,
-      "❌ Booking Declined",
-      `Your booking (${booking.code}) has been declined by the expert.`
-    );*/
+ 
 
     res.json({ success: true, message: "❌ Booking declined & payment reversed if present", booking });
 
