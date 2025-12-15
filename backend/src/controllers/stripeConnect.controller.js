@@ -60,7 +60,12 @@ export async function getConnectStatus(req, res) {
     const profile = await ExpertProfile.findOne({ userId });
 
     if (!profile || !profile.stripeConnectId) {
-      return res.json({ connected: false });
+      return res.json({
+        connected: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        stripeConnectId: null,
+      });
     }
 
     const account = await stripe.accounts.retrieve(profile.stripeConnectId);
@@ -76,6 +81,7 @@ export async function getConnectStatus(req, res) {
       connected: true,
       payoutsEnabled,
       detailsSubmitted: account.details_submitted,
+      stripeConnectId: profile.stripeConnectId,
     });
   } catch (err) {
     console.error("getConnectStatus error", err);

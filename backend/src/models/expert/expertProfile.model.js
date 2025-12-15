@@ -27,6 +27,18 @@ const expertProfileSchema = new mongoose.Schema(
     certificates: [{ type: String, trim: true }],
     gallery: [{ type: String, trim: true }],
 
+
+    
+    // ⭐️ Rating مجمّع من كل الخدمات التابعة للخبير
+    ratingAvg: {
+      type: Number,
+      default: 0,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
+    },
+    
     // approval workflow
     status: {
       type: String,

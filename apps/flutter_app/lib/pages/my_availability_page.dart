@@ -18,6 +18,7 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
   bool loading = true;
   bool saving = false;
 
+  // 0 = Sun .. 6 = Sat
   final List<Map<String, dynamic>> days = [
     {"dow": 0, "label": "Sunday", "start": "09:00", "end": "17:00", "active": false},
     {"dow": 1, "label": "Monday", "start": "09:00", "end": "17:00", "active": false},
@@ -42,6 +43,9 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     return prefs.getString('token');
   }
 
+  // ============================
+  // GET /expert/availability/me
+  // ============================
   Future<void> _fetchAvailability() async {
     try {
       final token = await _getToken();
@@ -52,24 +56,37 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        setState(() {
-          bufferMinutes = data['bufferMinutes'] ?? 15;
+        final av = data['availability'];
 
-          if (data['rules'] != null) {
-            for (var r in data['rules']) {
+        if (av != null) {
+          final int buf = av['bufferMinutes'] ?? 15;
+          final List rules = av['rules'] ?? [];
+          final List ex = av['exceptions'] ?? [];
+
+          setState(() {
+            bufferMinutes = buf;
+
+            // reset days
+            for (var d in days) {
+              d['active'] = false;
+              d['start'] = "09:00";
+              d['end'] = "17:00";
+            }
+
+            // apply rules
+            for (var r in rules) {
               final idx = days.indexWhere((d) => d['dow'] == r['dow']);
               if (idx != -1) {
-                days[idx]['start'] = r['start'];
-                days[idx]['end'] = r['end'];
+                days[idx]['start'] = r['start'] ?? "09:00";
+                days[idx]['end'] = r['end'] ?? "17:00";
                 days[idx]['active'] = true;
               }
             }
-          }
 
-          if (data['exceptions'] != null) {
-            exceptions = List<Map<String, dynamic>>.from(data['exceptions']);
-          }
-        });
+            exceptions =
+                List<Map<String, dynamic>>.from(ex.map((e) => Map<String, dynamic>.from(e)));
+          });
+        }
       }
     } catch (e) {
       debugPrint("❌ Error fetching availability: $e");
@@ -78,6 +95,9 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     }
   }
 
+  // ============================
+  // PUT /expert/availability/me
+  // ============================
   Future<void> _saveAvailability() async {
     setState(() => saving = true);
     try {
@@ -102,18 +122,18 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
         body: jsonEncode(body),
       );
 
-     if (res.statusCode == 200) {
-  final data = jsonDecode(res.body);
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(data['message'] ?? "✅ Saved successfully!"),
-      backgroundColor: data['message'].toString().contains("⚠️")
-          ? Colors.orangeAccent
-          : Colors.green,
-    ),
-  );
-}
- else {
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? "✅ Saved successfully!"),
+            backgroundColor: data['message'].toString().contains("⚠️")
+                ? Colors.orangeAccent
+                : Colors.green,
+          ),
+        );
+        await _fetchAvailability();
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("⚠️ Failed to save: ${res.body}"),
@@ -137,7 +157,8 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
       helpText: isStart ? "Select Start Time" : "Select End Time",
     );
     if (picked != null) {
-      final formatted = "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
+      final formatted =
+          "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
       setState(() {
         if (isStart) {
           day['start'] = formatted;
@@ -157,39 +178,87 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("My Availability"),
-        backgroundColor: const Color(0xFF007B9E),
+        backgroundColor: const Color(0xFF0EA5E9),
         foregroundColor: Colors.white,
       ),
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFF3F4F6),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 950),
+          constraints: const BoxConstraints(maxWidth: 1200),
           child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Weekly Schedule",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: ListView(
+            // ✅ نلف الكل بـ SingleChildScrollView عشان ما يصير Overflow
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final bool isWide = constraints.maxWidth >= 980;
+                return SingleChildScrollView(
+                  child: Column(
                     children: [
-                      ..._buildWeekDays(),
-                      const SizedBox(height: 25),
-                      _buildCalendarSection(),
+                      if (isWide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 5, child: _buildWeeklyCard()),
+                            const SizedBox(width: 24),
+                            Expanded(flex: 5, child: _buildCalendarCard()),
+                          ],
+                        )
+                      else ...[
+                        _buildWeeklyCard(),
+                        const SizedBox(height: 20),
+                        _buildCalendarCard(),
+                      ],
+                      const SizedBox(height: 80), // مساحة للزرّ تحت
                     ],
                   ),
-                ),
-                const SizedBox(height: 20),
-                _buildBufferSelector(),
-                const SizedBox(height: 25),
-                _buildSaveButton(),
-              ],
+                );
+              },
             ),
           ),
+        ),
+      ),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildBufferSelector(),
+            _buildSaveButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================
+  // Weekly Schedule Card
+  // ============================
+
+  Widget _buildWeeklyCard() {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Weekly Schedule",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "Turn days ON to enable bookings, and adjust working hours for each day.",
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 18),
+            ..._buildWeekDays(),
+          ],
         ),
       ),
     );
@@ -197,94 +266,156 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
 
   List<Widget> _buildWeekDays() {
     return days.map((d) {
-      return Card(
+      final bool active = d['active'] == true;
+
+      return Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
-        elevation: 1.5,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: Row(
-                  children: [
-                    Switch(
-                      inactiveThumbColor: Colors.grey.shade400,
-                      inactiveTrackColor: Colors.grey.shade300,
-                      activeColor: const Color(0xFF00A1C9),
-                      value: d['active'],
-                      onChanged: (v) => setState(() => d['active'] = v),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFE0F2FE) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: active ? const Color(0xFF38BDF8) : const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Switch + Day
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  Switch(
+                    inactiveThumbColor: Colors.grey.shade400,
+                    inactiveTrackColor: Colors.grey.shade300,
+                    activeColor: const Color(0xFF0EA5E9),
+                    value: active,
+                    onChanged: (v) => setState(() => d['active'] = v),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    d['label'],
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: active ? const Color(0xFF0F172A) : Colors.grey,
                     ),
-                    Text(
-                      d['label'],
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: active
+                          ? const Color(0xFFDCFCE7)
+                          : const Color(0xFFFEE2E2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      active ? "ON" : "OFF",
                       style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: d['active'] ? Colors.black : Colors.grey,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: active
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFFDC2626),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Expanded(
-                flex: 3,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildTimeField(d, true),
-                    const Text("—"),
-                    _buildTimeField(d, false),
-                  ],
-                ),
+            ),
+            // Time range
+            Expanded(
+              flex: 4,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _buildTimeField(d, true),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Text("—"),
+                  ),
+                  _buildTimeField(d, false),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }).toList();
   }
 
   Widget _buildTimeField(Map<String, dynamic> d, bool isStart) {
+    final bool active = d['active'] == true;
     return InkWell(
-      onTap: d['active'] ? () => _pickTime(d, isStart) : null,
+      onTap: active ? () => _pickTime(d, isStart) : null,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: d['active'] ? Colors.white : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Text(
-          isStart ? d['start'] : d['end'],
-          style: TextStyle(
-            fontSize: 14,
-            color: d['active'] ? Colors.black87 : Colors.grey,
+          color: active ? Colors.white : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: active ? const Color(0xFFBFDBFE) : Colors.grey.shade300,
           ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.access_time, size: 16, color: Color(0xFF6B7280)),
+            const SizedBox(width: 4),
+            Text(
+              isStart ? d['start'] : d['end'],
+              style: TextStyle(
+                fontSize: 13,
+                color: active ? const Color(0xFF111827) : Colors.grey,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildCalendarSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Calendar Overview",
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+  // ============================
+  // Calendar + Exceptions Card
+  // ============================
+
+  Widget _buildCalendarCard() {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Calendar Overview",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "Days with custom hours, days off, or weekly availability are highlighted.",
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 16),
+            _buildCalendarView(),
+            const SizedBox(height: 20),
+            _buildExceptionsSection(),
+          ],
         ),
-        const SizedBox(height: 10),
-        _buildCalendarView(),
-        const SizedBox(height: 30),
-        _buildExceptionsSection(),
-      ],
+      ),
     );
   }
 
   Widget _buildCalendarView() {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
         padding: const EdgeInsets.all(8.0),
         child: TableCalendar(
@@ -298,10 +429,13 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
           ),
           calendarStyle: CalendarStyle(
             todayDecoration: BoxDecoration(
-              color: const Color(0xFF00A1C9).withOpacity(0.3),
+              color: const Color(0xFF0EA5E9).withOpacity(0.25),
               shape: BoxShape.circle,
             ),
           ),
+          // ✅ نلوّن:
+          //  - Special Dates (exceptions) بألوان قوية
+          //  - أيام الدوام / OFF حسب الـ weekly rules
           calendarBuilders: CalendarBuilders(
             defaultBuilder: (context, date, _) {
               final dateStr =
@@ -311,26 +445,70 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
                 orElse: () => {},
               );
 
+              // 1) لو فيه Exception لهذا اليوم → نلوّنه بقوة (أحمر/أصفر)
               if (ex.isNotEmpty) {
                 final isOff = ex['off'] == true;
                 final color = isOff
-                    ? Colors.redAccent.withOpacity(0.8)
-                    : Colors.amber.withOpacity(0.9);
+                    ? Colors.redAccent.withOpacity(0.9)
+                    : Colors.amber.withOpacity(0.95);
                 return InkWell(
                   onTap: () => _showDayDetails(dateStr, ex),
                   child: Container(
                     margin: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
                     child: Center(
                       child: Text(
                         "${date.day}",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 );
               }
-              return null;
+
+              // 2) لو ما فيه Exception → نلوّن حسب Weekly rules
+              final int dow = date.weekday % 7; // Monday=1..Sunday=7 → 0..6
+              final dayRule =
+                  days.firstWhere((d) => d['dow'] == dow, orElse: () => {});
+              final bool isWorkingDay =
+                  dayRule.isNotEmpty && dayRule['active'] == true;
+
+              if (isWorkingDay) {
+                // يوم دوام عادي
+                return Container(
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0F2FE),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      "${date.day}",
+                      style: const TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                );
+              } else {
+                // يوم OFF أسبوعي (بس نخفف لونه)
+                return Center(
+                  child: Text(
+                    "${date.day}",
+                    style: const TextStyle(
+                      color: Color(0xFF9CA3AF),
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                );
+              }
             },
           ),
         ),
@@ -351,9 +529,8 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: windows
-                        .map((w) => Text("• ${w['start']} – ${w['end']}"))
-                        .toList(),
+                    children:
+                        windows.map((w) => Text("• ${w['start']} – ${w['end']}")).toList(),
                   )
                 : const Text("This day has no special hours."),
         actions: [
@@ -372,18 +549,29 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
       children: [
         const Text(
           "Special Dates (Days Off / Custom Windows)",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0F172A),
+          ),
         ),
-        const SizedBox(height: 10),
-        ...exceptions.map((e) => _buildExceptionTile(e)).toList(),
+        const SizedBox(height: 8),
+        if (exceptions.isEmpty)
+          const Text(
+            "No special dates yet. Add days off or custom windows when needed.",
+            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          )
+        else
+          ...exceptions.map((e) => _buildExceptionTile(e)).toList(),
         const SizedBox(height: 10),
         ElevatedButton.icon(
           onPressed: _addExceptionDialog,
           icon: const Icon(Icons.add),
           label: const Text("Add Special Date"),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF007B9E),
+            backgroundColor: const Color(0xFF0EA5E9),
             foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
       ],
@@ -396,14 +584,16 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     final windows = e['windows'] ?? [];
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         title: Text(
           "$date  ${isOff ? "(Day Off)" : ""}",
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: !isOff && windows.isNotEmpty
-            ? Text("Windows: ${windows.map((w) => "${w['start']}-${w['end']}").join(', ')}")
+            ? Text(
+                "Windows: ${windows.map((w) => "${w['start']}-${w['end']}").join(', ')}")
             : null,
         trailing: IconButton(
           icon: const Icon(Icons.delete, color: Colors.redAccent),
@@ -413,6 +603,10 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     );
   }
 
+  // ============================
+  // Dialogs
+  // ============================
+
   Future<void> _addExceptionDialog() async {
     DateTime? selectedDate;
     bool isOff = false;
@@ -421,7 +615,7 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     await showDialog(
       context: context,
       builder: (context) {
-        return StatefulBuilder(builder: (context, setState) {
+        return StatefulBuilder(builder: (context, setStateDialog) {
           return AlertDialog(
             title: const Text("Add Special Date"),
             content: SingleChildScrollView(
@@ -437,20 +631,27 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
                         firstDate: DateTime(now.year - 1),
                         lastDate: DateTime(now.year + 2),
                       );
-                      if (picked != null) setState(() => selectedDate = picked);
+                      if (picked != null) {
+                        setStateDialog(() => selectedDate = picked);
+                      }
                     },
                     icon: const Icon(Icons.calendar_month, color: Colors.white),
-                    label: Text(selectedDate == null
-                        ? "Select Date"
-                        : "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}"),
+                    label: Text(
+                      selectedDate == null
+                          ? "Select Date"
+                          : "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}",
+                    ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF007B9E),
+                      backgroundColor: const Color(0xFF0EA5E9),
                     ),
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Checkbox(value: isOff, onChanged: (v) => setState(() => isOff = v ?? false)),
+                      Checkbox(
+                        value: isOff,
+                        onChanged: (v) => setStateDialog(() => isOff = v ?? false),
+                      ),
                       const Text("Mark as day off"),
                     ],
                   ),
@@ -459,17 +660,22 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text("Custom Windows:"),
-                        ...windows.map((w) => Text("${w['start']} - ${w['end']}")),
+                        const SizedBox(height: 4),
+                        ...windows
+                            .map((w) => Text("• ${w['start']} - ${w['end']}"))
+                            .toList(),
                         const SizedBox(height: 8),
                         ElevatedButton.icon(
                           icon: const Icon(Icons.add),
                           label: const Text("Add Window"),
                           onPressed: () async {
                             final result = await _addWindowDialog();
-                            if (result != null) setState(() => windows.add(result));
+                            if (result != null) {
+                              setStateDialog(() => windows.add(result));
+                            }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF007B9E),
+                            backgroundColor: const Color(0xFF0EA5E9),
                             foregroundColor: Colors.white,
                           ),
                         ),
@@ -479,18 +685,27 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
               ElevatedButton(
                 onPressed: () {
                   if (selectedDate == null) return;
                   final dateStr =
                       "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
                   setState(() {
-                    exceptions.add({"date": dateStr, "off": isOff, "windows": isOff ? [] : windows});
+                    exceptions.add({
+                      "date": dateStr,
+                      "off": isOff,
+                      "windows": isOff ? [] : windows
+                    });
                   });
                   Navigator.pop(context);
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007B9E)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0EA5E9),
+                ),
                 child: const Text("Save"),
               ),
             ],
@@ -512,15 +727,28 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(decoration: const InputDecoration(labelText: "Start (HH:MM)"), onChanged: (v) => start = v),
-              TextField(decoration: const InputDecoration(labelText: "End (HH:MM)"), onChanged: (v) => end = v),
+              TextField(
+                decoration:
+                    const InputDecoration(labelText: "Start (HH:MM)"),
+                onChanged: (v) => start = v,
+              ),
+              TextField(
+                decoration: const InputDecoration(labelText: "End (HH:MM)"),
+                onChanged: (v) => end = v,
+              ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, {"start": start, "end": end}),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007B9E)),
+              onPressed: () =>
+                  Navigator.pop(context, {"start": start, "end": end}),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
+              ),
               child: const Text("Add"),
             ),
           ],
@@ -529,20 +757,28 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     );
   }
 
+  // ============================
+  // Buffer + Save
+  // ============================
+
   Widget _buildBufferSelector() {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const Text("Break between bookings (minutes):"),
+        const Text(
+          "Break between bookings:",
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        ),
         const SizedBox(width: 10),
         DropdownButton<int>(
           value: bufferMinutes,
           onChanged: (v) => setState(() => bufferMinutes = v!),
           items: const [
-            DropdownMenuItem(value: 0, child: Text("0")),
-            DropdownMenuItem(value: 10, child: Text("10")),
-            DropdownMenuItem(value: 15, child: Text("15")),
-            DropdownMenuItem(value: 30, child: Text("30")),
-            DropdownMenuItem(value: 60, child: Text("60")),
+            DropdownMenuItem(value: 0, child: Text("0 min")),
+            DropdownMenuItem(value: 10, child: Text("10 min")),
+            DropdownMenuItem(value: 15, child: Text("15 min")),
+            DropdownMenuItem(value: 30, child: Text("30 min")),
+            DropdownMenuItem(value: 60, child: Text("60 min")),
           ],
         ),
       ],
@@ -550,20 +786,27 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
   }
 
   Widget _buildSaveButton() {
-    return Center(
-      child: ElevatedButton.icon(
-        icon: saving
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : const Icon(Icons.save),
-        label: Text(saving ? "Saving..." : "Save Changes"),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF007B9E),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return ElevatedButton.icon(
+      icon: saving
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.save),
+      label: Text(saving ? "Saving..." : "Save Changes"),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF0EA5E9),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
         ),
-        onPressed: saving ? null : _saveAvailability,
       ),
+      onPressed: saving ? null : _saveAvailability,
     );
   }
 }

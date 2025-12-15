@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
+import '../config/api_config.dart';
 class NotificationsAPI {
-  static const String baseUrl = "http://localhost:5000/api/notifications";
+ static String get baseUrl => "${ApiConfig.baseUrl}/api/notifications";
 
   // 🔹 Get token
   static Future<String?> _token() async {

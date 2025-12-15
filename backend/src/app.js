@@ -15,7 +15,7 @@ import uploadRouter from "./routes/upload.routes.js";
 import authRouter from "./routes/auth.routes.js";
 import customerRoutes from "./routes/customer.routes.js";
 import adminRoutes from "./routes/admin.route.js";
-import notificationRoutes from "./routes/notification.route.js";
+import notificationsRoutes from "./routes/notifications.routes.js";
 import serviceRouter from "./routes/service.route.js";
 import expertBookingRoute from "./routes/expert.booking.route.js";
 
@@ -28,8 +28,8 @@ import paymentRoutes from "./routes/payments.routes.js";            // 💳 ال
 import expertEarningsRoutes from "./routes/expertEarnings.route.js";
 
 
-import notifyRoutes from "./routes/notify.route.js";
-import fcmRoutes from "./routes/fcm.route.js";
+
+import pushRoutes from "./routes/push.routes.js";
 
 import publicServicesRoutes from "./routes/public.services.routes.js";
 
@@ -110,12 +110,13 @@ app.use("/api/expert/earnings", expertEarningsRoutes);
 app.use("/api", disputeRoutes);
 
 
-app.use("/api/fcm", fcmRoutes);
+
 
 // 🔹 الإشعارات (Notifications)
-app.use("/api/notifications", notificationRoutes);
+app.use("/api/notifications", notificationsRoutes);
+app.use("/api/push", pushRoutes);
 
-app.use("/api/notify", notifyRoutes);
+
 
 app.use("/api/messages", messageRoutes);
 
@@ -123,6 +124,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/assistant", aiRoutes);
 // 🔹 الإدارة (Admin)
 app.use("/api/admin", adminRoutes);
+
 
 // 🔹 حجوزات الخبير (Expert Dashboard) ← آخر شيء دائمًا
 app.use("/api", expertBookingRoute);

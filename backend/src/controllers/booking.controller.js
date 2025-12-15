@@ -10,9 +10,10 @@ import Payment from "../models/payment.model.js";
 import Service from "../models/expert/service.model.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
 import { assertNoOverlap } from "../services/booking.service.js";
-import { sendNotificationToUser } from "../services/notificationSender.js";
-import { sendFCM } from "../utils/sendFCM.js";
+
 import User from "../models/user/user.model.js";
+
+import { updateExpertRatingByUserId } from "../services/expertRating.service.js";
 
 import Stripe from "stripe";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -266,23 +267,7 @@ export async function createBookingPublic(req, res) {
    
 
 
-/*await sendNotificationToUser( 
-  expertUserId,
-   "📥 New Booking Received",
-    `You have a new booking request — Code: ${booking.code}`
-  );
 
-  // === إرسال إشعار Firebase Push Notification ===
-const expertUser = await User.findById(expertUserId);
-
-if (expertUser?.fcmToken) {
-  await sendFCM(
-    expertUser.fcmToken,
-    "📥 New Booking",
-    `New booking received — Code: ${booking.code}`,
-    { bookingId: booking._id.toString() }
-  );
-}*/
 
     // ---------------------------------------------------------
     // 🔟 Final Response
@@ -436,6 +421,9 @@ export async function addCustomerReview(req, res) {
       service.ratingAvg = total / (service.ratingCount || 1);
 
       await service.save();
+      
+      // ⭐️ مهم: حدّث Rating البروفايل ككل بناءً على كل الخدمات
+      await updateExpertRatingByUserId(service.expert);
     }
 
     return res.json({

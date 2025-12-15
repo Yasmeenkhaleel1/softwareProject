@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
-import '../services/push_notification_service.dart';
+import '../services/push_notifications.dart';
 
 // ✅ استيراد الصفحات
 import 'landing_page.dart';
@@ -76,8 +76,7 @@ class _LoginPageState extends State<LoginPage> {
         await prefs.setString('email', data['user']['email']);
         await prefs.setString('userId', data['user']['id']);
 
-        // 🔔 تسجيل FCM token
-        await PushNotificationService.initFCM();
+       
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("✅ Login successful!")),

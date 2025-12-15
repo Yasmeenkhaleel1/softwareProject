@@ -30,40 +30,9 @@
      🔔 NOTIFICATIONS (FCM + SERVICE WORKER)
      ============================================================ -->
 <script>
-  // 1) طلب الإذن
-  if ("Notification" in window) {
-    Notification.requestPermission().then(function (permission) {
-      console.log("🔔 Notification permission:", permission);
-    });
-  }
+  
 
-  // 2) Flutter → Service Worker
-  window.postMessageToSW = function(message) {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({
-        type: "SHOW_NOTIFICATION",
-        title: message.title,
-        body: message.body
-      });
-    } else {
-      console.log("⚠️ No SW controller available — page not controlled yet");
-    }
-  };
-
-  // 3) إشعار عادي بدون SW
-  window.showFlutterNotification = function(title, body) {
-    if (!("Notification" in window)) {
-      alert(title + "\n" + body);
-      return;
-    }
-
-    new Notification(title || "Notification", {
-      body: body || "",
-      icon: "icons/Icon-192.png"
-    });
-  };
-
-  // 4) تسجيل Service Worker
+  //  تسجيل Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
       navigator.serviceWorker

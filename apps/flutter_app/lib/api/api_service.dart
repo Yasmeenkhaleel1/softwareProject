@@ -670,4 +670,31 @@ static Future<String> askAssistant({
     }
   }
 
+
+static Future<void> registerPushToken({
+  required String token,
+  required String platform,
+}) async {
+  final jwt = await getToken();
+  final url = "$baseUrl/push/register";
+
+  final res = await http.post(
+    Uri.parse(url),
+    headers: {
+      "Content-Type": "application/json",
+      if (jwt != null) "Authorization": "Bearer $jwt",
+    },
+    body: jsonEncode({
+      "token": token,
+      "platform": platform,
+      "userAgent": "", // اختياري
+      "deviceId": "",  // اختياري
+    }),
+  );
+
+  if (res.statusCode >= 400) {
+    throw Exception("Failed to register push token: ${res.body}");
+  }
+}
+
 }

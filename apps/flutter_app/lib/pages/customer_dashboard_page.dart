@@ -1437,8 +1437,10 @@ TextButton(
     final name = (expert["name"] ?? "Unknown").toString();
     final specialty =
         (expert["specialization"] ?? expert["specialty"] ?? "N/A").toString();
-    final ratingVal =
-        (expert["ratingAvg"] ?? expert["rating"] ?? 0).toString();
+    
+  final num rawRating = (expert["ratingAvg"] ?? expert["rating"] ?? 0) as num;
+  final double rating = rawRating.toDouble();
+
     final String profileImageUrl =
     ApiConfig.fixAssetUrl(expert['profileImageUrl'] as String?);
 
@@ -1537,7 +1539,7 @@ TextButton(
                           size: 15, color: Colors.amber),
                       const SizedBox(width: 3),
                       Text(
-                        ratingVal,
+                         "${rating.toStringAsFixed(1)}/5",
                         style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 12,

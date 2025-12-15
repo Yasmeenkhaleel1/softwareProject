@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 import 'package:flutter_stripe/flutter_stripe.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,6 +33,7 @@ import 'pages/admin_dashboard_page.dart';
 import 'pages/expert_earnings_page.dart';
 
 import 'services/auth_service.dart';
+import 'services/push_notifications.dart';
 
 // ----------------------------------------------------------------------------
 //🔥 FCM Background Handler + Local Notifications
@@ -44,7 +45,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint("📩 BG Notification: ${message.notification?.title}");
 }
 
-late FlutterLocalNotificationsPlugin localNoti;
+
 
 // ----------------------------------------------------------------------------
 // MAIN
@@ -64,13 +65,11 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // ✅ 3) إشعارات الخلفية + local notifications فقط لغير الويب
+if (!kIsWeb) {
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+}
 
-  localNoti = FlutterLocalNotificationsPlugin();
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const initSettings = InitializationSettings(android: androidInit);
-  await localNoti.initialize(initSettings);
+
 
   // ✅ 4) تشغيل التطبيق
   runApp(
@@ -96,48 +95,37 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
   String? _role;
   bool _isApproved = true;
   bool _hasProfile = true;
+bool _pushInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _checkLoginStatus();
-    _initNotifications();
   }
 
-  // ✅ تجهيز الاستماع للإشعارات في الـ Foreground
-  Future<void> _initNotifications() async {
-    final messaging = FirebaseMessaging.instance;
+Future<void> _ensurePushInitialized() async {
+  if (_pushInitialized) return;
 
-    final settings = await messaging.getNotificationSettings();
-    debugPrint("🔔 Notification settings: ${settings.authorizationStatus}");
+  // لازم يكون المستخدم عامل Login (JWT محفوظ)
+  final prefs = await SharedPreferences.getInstance();
+  final jwt = prefs.getString('token');
+  if (jwt == null) return;
 
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint("📥 Foreground Notification Received");
-      debugPrint("➡ ${message.notification?.title}");
-      debugPrint("➡ ${message.notification?.body}");
+  try {
+    
+    await PushNotifications.init(); // ✅ هنا التسجيل بالباك + listeners
+    if (!mounted) return;
+      setState(() => _pushInitialized = true);
 
-      final title = message.notification?.title ?? "Notification";
-      final body = message.notification?.body ?? "";
-
-      if (!kIsWeb) {
-        localNoti.show(
-          0,
-          title,
-          body,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'lost_channel',
-              'Lost Treasures Notifications',
-              importance: Importance.max,
-              priority: Priority.high,
-            ),
-          ),
-        );
-      } else {
-        debugPrint("🌐 Web notification: $title | $body");
-      }
-    });
+    debugPrint("✅ PushNotifications initialized");
+  } catch (e) {
+    debugPrint("❌ Push init failed: $e");
   }
+}
+
+
+
+
 
   // ✅ التحقق من حالة تسجيل الدخول + الموافقة + البروفايل
   Future<void> _checkLoginStatus() async {
@@ -177,6 +165,9 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
         _hasProfile = hasProfile;
         _isLoading = false;
       });
+     
+    await _ensurePushInitialized(); 
+
     } else {
       setState(() {
         _isLoggedIn = false;
@@ -192,8 +183,11 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+    
+
 
     setState(() {
+       _pushInitialized = false;
       _isLoggedIn = false;
       _role = null;
       _isApproved = true;
@@ -265,6 +259,8 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
         '/login_page': (context) => LoginPage(
               onLoginSuccess: () async {
                 await _checkLoginStatus();
+                await _ensurePushInitialized();
+               
               },
             ),
         '/signup_page': (context) => const SignupPage(),
