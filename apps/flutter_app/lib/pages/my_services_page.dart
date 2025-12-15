@@ -449,73 +449,125 @@ class _MyServicesPageState extends State<MyServicesPage>
     final isPortrait =
         MediaQuery.of(context).orientation == Orientation.portrait;
     final screenWidth = MediaQuery.of(context).size.width;
+    final isLargeScreen = screenWidth > 600;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: NestedScrollView(
-        controller: _scrollController,
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverAppBar(
-              backgroundColor: const Color(0xFF62C6D9),
-              pinned: true,
-              floating: true,
-              expandedHeight: 120,
-              flexibleSpace: FlexibleSpaceBar(
-                centerTitle: true,
-                title: const Text(
-                  "",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+      body: DefaultTabController(
+        length: 4,
+        child: NestedScrollView(
+          controller: _scrollController,
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverAppBar(
+                backgroundColor: const Color(0xFF62C6D9),
+                pinned: true,
+                floating: true,
+                expandedHeight: isLargeScreen ? 140 : 120,
+                title: isLargeScreen
+                    ? const Text(
+                        "My Services",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : const Text(
+                        "My Services",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                flexibleSpace: FlexibleSpaceBar(
+                  centerTitle: isLargeScreen ? false : true,
+                  title: isLargeScreen
+                      ? null
+                      : const Text(
+                          "",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+                bottom: TabBar(
+                  controller: _tab,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white70,
+                  indicatorColor: Colors.white,
+                  indicatorSize: isLargeScreen
+                      ? TabBarIndicatorSize.tab
+                      : TabBarIndicatorSize.label,
+                  labelStyle: TextStyle(
+                    fontSize: isLargeScreen ? 15 : 13,
+                    fontWeight: FontWeight.w500,
                   ),
+                  tabs: const [
+                    Tab(text: "All"),
+                    Tab(text: "Published"),
+                    Tab(text: "Hidden"),
+                    Tab(text: "Archived"),
+                  ],
                 ),
               ),
-              bottom: TabBar(
-                controller: _tab,
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white70,
-                indicatorColor: Colors.white,
-                tabs: const [
-                  Tab(text: "All"),
-                  Tab(text: "Published"),
-                  Tab(text: "Hidden"),
-                  Tab(text: "Archived"),
+            ];
+          },
+          body: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isLargeScreen ? 1200 : double.infinity,
+              ),
+              child: Column(
+                children: [
+                  // عرض الإحصائيات هنا (تحت AppBar، فوق التاب بار)
+                  if (_stats != null) _buildStatsContainer(),
+
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tab,
+                      children: List.generate(4, (index) => _buildTabContent()),
+                    ),
+                  ),
                 ],
               ),
             ),
-          ];
-        },
-        body: Column(
-          children: [
-            // عرض الإحصائيات هنا (تحت AppBar، فوق التاب بار)
-            if (_stats != null)
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: _buildStatsRow(),
-              ),
-            
-            Expanded(
-              child: TabBarView(
-                controller: _tab,
-                children: List.generate(4, (index) => _buildTabContent()),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
       floatingActionButton: _buildFloatingActionButton(isPortrait, screenWidth),
     );
   }
 
+  Widget _buildStatsContainer() {
+    final isLargeScreen = MediaQuery.of(context).size.width > 600;
+    
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.symmetric(
+        vertical: isLargeScreen ? 16 : 12,
+        horizontal: isLargeScreen ? 24 : 12,
+      ),
+      child: _buildStatsRow(),
+    );
+  }
+
   Widget _buildTabContent() {
+    final isLargeScreen = MediaQuery.of(context).size.width > 600;
+    
     return Column(
       children: [
         // 🔍 شريط البحث
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          padding: EdgeInsets.fromLTRB(
+            isLargeScreen ? 24 : 12, 
+            isLargeScreen ? 20 : 12, 
+            isLargeScreen ? 24 : 12, 
+            isLargeScreen ? 16 : 8,
+          ),
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
@@ -540,16 +592,16 @@ class _MyServicesPageState extends State<MyServicesPage>
                   borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: isLargeScreen ? 20 : 16,
+                  vertical: isLargeScreen ? 18 : 14,
                 ),
               ),
             ),
           ),
         ),
 
-        const SizedBox(height: 8),
+        SizedBox(height: isLargeScreen ? 20 : 16),
 
         Expanded(
           child: _loading && _items.isEmpty
@@ -560,33 +612,66 @@ class _MyServicesPageState extends State<MyServicesPage>
                       onRefresh: _refreshData,
                       color: const Color(0xFF62C6D9),
                       child: AnimationLimiter(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: _items.length + (_hasMore ? 1 : 0),
-                          itemBuilder: (_, i) {
-                            if (i == _items.length) {
-                              return _buildLoadMoreIndicator();
-                            }
-                            return AnimationConfiguration.staggeredList(
-                              position: i,
-                              duration: const Duration(milliseconds: 500),
-                              child: SlideAnimation(
-                                verticalOffset: 50.0,
-                                child: FadeInAnimation(
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsets.only(bottom: 12),
-                                    child: _buildServiceCard(_items[i]),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                        child: isLargeScreen
+                            ? _buildWebGrid()
+                            : _buildMobileList(),
                       ),
                     ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWebGrid() {
+    return GridView.builder(
+      padding: EdgeInsets.all(MediaQuery.of(context).size.width > 800 ? 24 : 16),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: MediaQuery.of(context).size.width > 1000 ? 2 : 1,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: MediaQuery.of(context).size.width > 1000 ? 1.8 : 2.5,
+      ),
+      itemCount: _items.length + (_hasMore ? 1 : 0),
+      itemBuilder: (_, i) {
+        if (i == _items.length) {
+          return _buildLoadMoreIndicator();
+        }
+        return AnimationConfiguration.staggeredGrid(
+          position: i,
+          duration: const Duration(milliseconds: 500),
+          columnCount: 2,
+          child: ScaleAnimation(
+            child: FadeInAnimation(
+              child: _buildServiceCard(_items[i]),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: _items.length + (_hasMore ? 1 : 0),
+      itemBuilder: (_, i) {
+        if (i == _items.length) {
+          return _buildLoadMoreIndicator();
+        }
+        return AnimationConfiguration.staggeredList(
+          position: i,
+          duration: const Duration(milliseconds: 500),
+          child: SlideAnimation(
+            verticalOffset: 50.0,
+            child: FadeInAnimation(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildServiceCard(_items[i]),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -596,7 +681,10 @@ class _MyServicesPageState extends State<MyServicesPage>
 
     Widget statCard(String label, String value, IconData icon, Color color) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: isLargeScreen ? 16 : 12,
+          vertical: isLargeScreen ? 12 : 10,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -604,8 +692,8 @@ class _MyServicesPageState extends State<MyServicesPage>
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -613,21 +701,21 @@ class _MyServicesPageState extends State<MyServicesPage>
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(5),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: color, size: isLargeScreen ? 18 : 16),
+              child: Icon(icon, color: color, size: isLargeScreen ? 24 : 18),
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: isLargeScreen ? 10 : 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: isLargeScreen ? 16 : 14,
+                    fontSize: isLargeScreen ? 22 : 16,
                     fontWeight: FontWeight.bold,
                     color: const Color(0xFF1E293B),
                   ),
@@ -635,7 +723,7 @@ class _MyServicesPageState extends State<MyServicesPage>
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: isLargeScreen ? 11 : 9,
+                    fontSize: isLargeScreen ? 12 : 10,
                     color: const Color(0xFF64748B),
                   ),
                 ),
@@ -646,116 +734,195 @@ class _MyServicesPageState extends State<MyServicesPage>
       );
     }
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      alignment: WrapAlignment.center,
-      children: [
-        statCard("Total", "${s['total']}", Icons.all_inbox,
-            const Color(0xFF62C6D9)),
-        statCard("Published", "${s['published']}", Icons.visibility,
-            Colors.green),
-        statCard("Active", "${s['active']}", Icons.check_circle, Colors.blue),
-        statCard("Archived", "${s['archived']}", Icons.archive, Colors.grey),
-      ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          statCard("Total", "${s['total']}", Icons.all_inbox,
+              const Color(0xFF62C6D9)),
+          SizedBox(width: isLargeScreen ? 16 : 12),
+          statCard("Published", "${s['published']}", Icons.visibility,
+              Colors.green),
+          SizedBox(width: isLargeScreen ? 16 : 12),
+          statCard("Active", "${s['active']}", Icons.check_circle, Colors.blue),
+          SizedBox(width: isLargeScreen ? 16 : 12),
+          statCard("Archived", "${s['archived']}", Icons.archive, Colors.grey),
+        ],
+      ),
     );
   }
 
   Widget _buildShimmerLoader() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: 4,
-      itemBuilder: (_, i) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
+    final isLargeScreen = MediaQuery.of(context).size.width > 600;
+    
+    if (isLargeScreen) {
+      return GridView.builder(
+        padding: const EdgeInsets.all(24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.8,
+        ),
+        itemCount: 4,
+        itemBuilder: (_, i) {
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          height: 20,
+                          color: Colors.grey[200],
+                          margin: const EdgeInsets.only(bottom: 8),
+                        ),
+                        Container(
+                          width: 120,
+                          height: 16,
+                          color: Colors.grey[200],
+                          margin: const EdgeInsets.only(bottom: 12),
+                        ),
+                        Container(
+                          width: double.infinity,
+                          height: 14,
+                          color: Colors.grey[200],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      height: 16,
-                      color: Colors.grey[200],
-                      margin: const EdgeInsets.only(bottom: 6),
-                    ),
-                    Container(
-                      width: 80,
-                      height: 12,
-                      color: Colors.grey[200],
-                      margin: const EdgeInsets.only(bottom: 8),
-                    ),
-                    Container(
-                      width: double.infinity,
-                      height: 12,
-                      color: Colors.grey[200],
-                    ),
-                  ],
+            ),
+          );
+        },
+      );
+    } else {
+      return ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: 4,
+        itemBuilder: (_, i) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        height: 16,
+                        color: Colors.grey[200],
+                        margin: const EdgeInsets.only(bottom: 6),
+                      ),
+                      Container(
+                        width: 80,
+                        height: 12,
+                        color: Colors.grey[200],
+                        margin: const EdgeInsets.only(bottom: 8),
+                      ),
+                      Container(
+                        width: double.infinity,
+                        height: 12,
+                        color: Colors.grey[200],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
   }
 
   Widget _buildEmptyState() {
+    final isLargeScreen = MediaQuery.of(context).size.width > 600;
+    
     return Center(
       child: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isLargeScreen ? 40 : 20),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 120,
-                height: 120,
+                width: isLargeScreen ? 150 : 120,
+                height: isLargeScreen ? 150 : 120,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.work_outline,
-                  size: 60,
-                  color: Color(0xFF94A3B8),
+                  size: isLargeScreen ? 80 : 60,
+                  color: const Color(0xFF94A3B8),
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text(
+              SizedBox(height: isLargeScreen ? 30 : 20),
+              Text(
                 "No Services Found",
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: isLargeScreen ? 26 : 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+                  color: const Color(0xFF1E293B),
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
-              const Text(
-                "You haven't created any services yet. Start by adding your first service!",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF64748B),
+              SizedBox(height: isLargeScreen ? 12 : 8),
+              SizedBox(
+                width: isLargeScreen ? 500 : 300,
+                child: Text(
+                  "You haven't created any services yet. Start by adding your first service!",
+                  style: TextStyle(
+                    fontSize: isLargeScreen ? 16 : 14,
+                    color: const Color(0xFF64748B),
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: isLargeScreen ? 30 : 24),
               ElevatedButton.icon(
                 onPressed: () async {
                   final created = await Navigator.push(
@@ -765,12 +932,19 @@ class _MyServicesPageState extends State<MyServicesPage>
                   if (created == true) _fetchAll();
                 },
                 icon: const Icon(Icons.add),
-                label: const Text("Create First Service"),
+                label: Text(
+                  "Create First Service",
+                  style: TextStyle(
+                    fontSize: isLargeScreen ? 16 : 14,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF62C6D9),
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isLargeScreen ? 32 : 24,
+                    vertical: isLargeScreen ? 18 : 14,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -785,15 +959,18 @@ class _MyServicesPageState extends State<MyServicesPage>
 
   Widget _buildLoadMoreIndicator() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 20),
       child: Center(
         child: _hasMore
             ? const CircularProgressIndicator(color: Color(0xFF62C6D9))
-            : const Padding(
-                padding: EdgeInsets.all(8.0),
+            : Padding(
+                padding: const EdgeInsets.all(12.0),
                 child: Text(
                   "No more services",
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: MediaQuery.of(context).size.width > 600 ? 16 : 14,
+                  ),
                 ),
               ),
       ),
@@ -801,13 +978,23 @@ class _MyServicesPageState extends State<MyServicesPage>
   }
 
   Widget _buildFloatingActionButton(bool isPortrait, double screenWidth) {
+    final isLargeScreen = screenWidth > 600;
+    
     return FloatingActionButton.extended(
       backgroundColor: const Color(0xFF62C6D9),
-      icon: const Icon(Icons.add, color: Colors.white),
+      icon: Icon(
+        Icons.add,
+        color: Colors.white,
+        size: isLargeScreen ? 24 : 20,
+      ),
       label: Text(
+        isLargeScreen ? "Add New Service" : 
         isPortrait || screenWidth > 400 ? "Add Service" : "Add",
-        style:
-            const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: isLargeScreen ? 16 : 14,
+        ),
       ),
       onPressed: () async {
         HapticFeedback.lightImpact();
@@ -834,9 +1021,9 @@ class _MyServicesPageState extends State<MyServicesPage>
           }
         }
       },
-      elevation: 6,
+      elevation: 8,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(isLargeScreen ? 20 : 16),
       ),
     );
   }
@@ -847,17 +1034,63 @@ class _MyServicesPageState extends State<MyServicesPage>
     final double price = (sv['price'] ?? 0).toDouble();
     final String currency = sv['currency'] ?? 'USD';
     final int duration = (sv['durationMinutes'] ?? 60) as int;
-
     final bool isPublished = sv['isPublished'] == true;
     final bool isArchived = (sv['status'] ?? 'ACTIVE') == 'ARCHIVED';
-
     final double rating = (sv['ratingAvg'] ?? 0).toDouble();
     final int ratingCount = (sv['ratingCount'] ?? 0) as int;
     final int bookings = (sv['bookingsCount'] ?? 0) as int;
-
     final List images = (sv['images'] ?? []) as List;
     final String? cover = images.isNotEmpty ? images.first.toString() : null;
 
+    final isLargeScreen = MediaQuery.of(context).size.width > 600;
+    
+    if (!isLargeScreen) {
+      return _buildMobileServiceCard(
+        title: title,
+        category: category,
+        price: price,
+        currency: currency,
+        duration: duration,
+        isPublished: isPublished,
+        isArchived: isArchived,
+        rating: rating,
+        ratingCount: ratingCount,
+        bookings: bookings,
+        cover: cover,
+        sv: sv,
+      );
+    } else {
+      return _buildWebServiceCard(
+        title: title,
+        category: category,
+        price: price,
+        currency: currency,
+        duration: duration,
+        isPublished: isPublished,
+        isArchived: isArchived,
+        rating: rating,
+        ratingCount: ratingCount,
+        bookings: bookings,
+        cover: cover,
+        sv: sv,
+      );
+    }
+  }
+
+  Widget _buildMobileServiceCard({
+    required String title,
+    required String category,
+    required double price,
+    required String currency,
+    required int duration,
+    required bool isPublished,
+    required bool isArchived,
+    required double rating,
+    required int ratingCount,
+    required int bookings,
+    required String? cover,
+    required Map<String, dynamic> sv,
+  }) {
     Color badgeColor;
     String badgeText;
     if (isArchived) {
@@ -872,242 +1105,507 @@ class _MyServicesPageState extends State<MyServicesPage>
     }
 
     return Card(
-      margin: EdgeInsets.zero,
-      elevation: 2,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // الصف العلوي: الصورة والمعلومات الأساسية
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // الصورة
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: const Color(0xFFF1F5F9),
-                  ),
-                  child: cover != null && cover.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(
-                            imageUrl: cover,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Center(
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: const Color(0xFF62C6D9),
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Icon(
-                              Icons.image,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                        )
-                      : Icon(
-                          Icons.image,
-                          color: Colors.grey[400],
-                        ),
-                ),
-                const SizedBox(width: 12),
-
-                // المعلومات
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // العنوان والباج
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1E293B),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Container(
-                            margin: const EdgeInsets.only(left: 4),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: badgeColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                              border:
-                                  Border.all(color: badgeColor.withOpacity(0.3)),
-                            ),
-                            child: Text(
-                              badgeText,
-                              style: TextStyle(
-                                color: badgeColor,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      // الفئة
-                      Text(
-                        category,
-                        style: TextStyle(
-                          color: const Color(0xFF62C6D9),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // الإحصائيات السريعة
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          _buildStatChip(
-                            Icons.attach_money,
-                            "${price.toStringAsFixed(0)} $currency",
-                          ),
-                          _buildStatChip(
-                            Icons.schedule,
-                            "$duration min",
-                          ),
-                          if (rating > 0)
-                            _buildStatChip(
-                              Icons.star,
-                              rating.toStringAsFixed(1),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white,
+              Colors.grey[50]!,
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 15,
+              offset: const Offset(0, 6),
             ),
-
-            const SizedBox(height: 12),
-
-            // صف الإحصائيات التفصيلية
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 🔝 الصف العلوي: الصورة + العنوان + البادج
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildDetailStat(
-                    "Bookings",
-                    "$bookings",
-                    Icons.event_available,
-                  ),
-                  if (rating > 0) ...[
-                    const SizedBox(width: 16),
-                    _buildDetailStat(
-                      "Rating",
-                      "${rating.toStringAsFixed(1)} ($ratingCount)",
-                      Icons.star,
+                  // 🖼️ الصورة (دائرية)
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
-                  ],
-                  const SizedBox(width: 16),
-                  _buildDetailStat(
-                    "Price",
-                    "${price.toStringAsFixed(2)} $currency",
-                    Icons.attach_money,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: cover != null && cover.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: cover,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: const Color(0xFFF1F5F9),
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: const Color(0xFF62C6D9),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: const Color(0xFFF1F5F9),
+                                child: const Icon(
+                                  Icons.work_outline,
+                                  color: Color(0xFF94A3B8),
+                                  size: 30,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: const Color(0xFFF1F5F9),
+                              child: const Icon(
+                                Icons.work_outline,
+                                color: Color(0xFF94A3B8),
+                                size: 30,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // 📝 المعلومات
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // العنوان
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B),
+                            height: 1.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+
+                        // الفئة
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.category,
+                              size: 14,
+                              color: const Color(0xFF62C6D9).withOpacity(0.8),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              category,
+                              style: TextStyle(
+                                color: const Color(0xFF62C6D9),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 🏷️ البادج
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: badgeColor.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(
+                        color: badgeColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ),
 
-            const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
-            // أزرار التحكم
-            _buildActionButtons(sv, isPublished, isArchived),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatChip(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: Colors.grey[600]),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[700],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailStat(String label, String value, IconData icon) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 12, color: Colors.grey[500]),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.grey[600],
+              // 📊 صف الإحصائيات
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF1F5F9)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildMobileStatItem(
+                      Icons.attach_money,
+                      "Price",
+                      "${price.toStringAsFixed(0)} $currency",
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: const Color(0xFFF1F5F9),
+                    ),
+                    _buildMobileStatItem(
+                      Icons.schedule,
+                      "Duration",
+                      "$duration min",
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: const Color(0xFFF1F5F9),
+                    ),
+                    _buildMobileStatItem(
+                      Icons.event_available,
+                      "Bookings",
+                      "$bookings",
+                    ),
+                    if (rating > 0) ...[
+                      Container(
+                        width: 1,
+                        height: 30,
+                        color: const Color(0xFFF1F5F9),
+                      ),
+                      _buildMobileStatItem(
+                        Icons.star,
+                        "Rating",
+                        rating.toStringAsFixed(1),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1E293B),
+
+              const SizedBox(height: 14),
+
+              // 🎯 أزرار التحكم للموبايل
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildMobileActionButton(
+                      Icons.remove_red_eye,
+                      "Preview",
+                      const Color(0xFF62C6D9),
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ServicePublicPreviewPage(
+                            serviceId: sv['_id'],
+                            service: {},
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildMobileActionButton(
+                      Icons.edit,
+                      "Edit",
+                      const Color(0xFF6B7280),
+                      () async {
+                        final updated = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ServiceFormPage(existing: sv, service: {}),
+                          ),
+                        );
+                        if (updated == true) _fetchAll();
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _buildMobileActionButton(
+                      isPublished ? Icons.visibility_off : Icons.visibility,
+                      isPublished ? "Hide" : "Publish",
+                      isPublished ? Colors.orange : Colors.green,
+                      () => _togglePublish(sv['_id'], !isPublished),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildMobileActionButton(
+                      isArchived ? Icons.unarchive : Icons.archive,
+                      isArchived ? "Restore" : "Archive",
+                      isArchived ? const Color(0xFF6B7280) : Colors.redAccent,
+                      () => isArchived
+                          ? _unarchive(sv['_id'])
+                          : _archive(sv['_id']),
+                      isDanger: !isArchived,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildActionButtons(
+  Widget _buildWebServiceCard({
+    required String title,
+    required String category,
+    required double price,
+    required String currency,
+    required int duration,
+    required bool isPublished,
+    required bool isArchived,
+    required double rating,
+    required int ratingCount,
+    required int bookings,
+    required String? cover,
+    required Map<String, dynamic> sv,
+  }) {
+    Color badgeColor;
+    String badgeText;
+    if (isArchived) {
+      badgeColor = Colors.grey;
+      badgeText = "Archived";
+    } else if (isPublished) {
+      badgeColor = Colors.green;
+      badgeText = "Published";
+    } else {
+      badgeColor = Colors.orange;
+      badgeText = "Hidden";
+    }
+
+    final isExtraLarge = MediaQuery.of(context).size.width > 1000;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // الصف العلوي: الصورة والمعلومات الأساسية
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // الصورة
+                  Container(
+                    width: isExtraLarge ? 120 : 100,
+                    height: isExtraLarge ? 120 : 100,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFFF1F5F9),
+                    ),
+                    child: cover != null && cover.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: cover,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: const Color(0xFF62C6D9),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Icon(
+                                Icons.image,
+                                color: Colors.grey[400],
+                                size: 40,
+                              ),
+                            ),
+                          )
+                        : Icon(
+                            Icons.image,
+                            color: Colors.grey[400],
+                            size: 40,
+                          ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // المعلومات
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // العنوان والباج
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1E293B),
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: badgeColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border:
+                                    Border.all(color: badgeColor.withOpacity(0.3)),
+                              ),
+                              child: Text(
+                                badgeText,
+                                style: TextStyle(
+                                  color: badgeColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 6),
+
+                        // الفئة
+                        Text(
+                          category,
+                          style: TextStyle(
+                            color: const Color(0xFF62C6D9),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // الإحصائيات السريعة
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 6,
+                          children: [
+                            _buildStatChip(
+                              Icons.attach_money,
+                              "${price.toStringAsFixed(0)} $currency",
+                              true,
+                            ),
+                            _buildStatChip(
+                              Icons.schedule,
+                              "$duration min",
+                              true,
+                            ),
+                            if (rating > 0)
+                              _buildStatChip(
+                                Icons.star,
+                                rating.toStringAsFixed(1),
+                                true,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // صف الإحصائيات التفصيلية
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildDetailStat(
+                      "Bookings",
+                      "$bookings",
+                      Icons.event_available,
+                      true,
+                    ),
+                    if (rating > 0) ...[
+                      const SizedBox(width: 24),
+                      _buildDetailStat(
+                        "Rating",
+                        "${rating.toStringAsFixed(1)} ($ratingCount)",
+                        Icons.star,
+                        true,
+                      ),
+                    ],
+                    const SizedBox(width: 24),
+                    _buildDetailStat(
+                      "Price",
+                      "${price.toStringAsFixed(2)} $currency",
+                      Icons.attach_money,
+                      true,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // أزرار التحكم للويب
+              _buildWebActionButtons(sv, isPublished, isArchived),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebActionButtons(
     Map<String, dynamic> sv,
     bool isPublished,
     bool isArchived,
   ) {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final isVeryLarge = MediaQuery.of(context).size.width > 800;
 
-    // قائمة الأزرار
     final List<Map<String, dynamic>> buttons = [
       {
         'icon': Icons.remove_red_eye,
@@ -1153,18 +1651,16 @@ class _MyServicesPageState extends State<MyServicesPage>
       },
     ];
 
-    if (screenWidth < 400) {
-      // للشاشات الصغيرة: أزرار عمودية
-      return Column(
-        children: buttons.map((btn) {
-          return Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 6),
+    return Row(
+      children: buttons.map((btn) {
+        return Expanded(
+          child: Container(
+            margin: const EdgeInsets.only(right: 8),
             child: OutlinedButton.icon(
               onPressed: btn['action'] as VoidCallback,
               icon: Icon(
                 btn['icon'] as IconData,
-                size: 16,
+                size: isVeryLarge ? 18 : 16,
                 color: (btn['isDanger'] as bool?) == true
                     ? Colors.redAccent
                     : (btn['color'] ?? const Color(0xFF62C6D9)),
@@ -1172,7 +1668,7 @@ class _MyServicesPageState extends State<MyServicesPage>
               label: Text(
                 btn['label'] as String,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: isVeryLarge ? 14 : 12,
                   color: (btn['isDanger'] as bool?) == true
                       ? Colors.redAccent
                       : (btn['color'] ?? const Color(0xFF62C6D9)),
@@ -1180,10 +1676,12 @@ class _MyServicesPageState extends State<MyServicesPage>
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isVeryLarge ? 12 : 8,
+                  vertical: isVeryLarge ? 10 : 8,
+                ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(isVeryLarge ? 10 : 8),
                 ),
                 side: BorderSide(
                   color: ((btn['isDanger'] as bool?) == true
@@ -1193,53 +1691,159 @@ class _MyServicesPageState extends State<MyServicesPage>
                 ),
               ),
             ),
-          );
-        }).toList(),
-      );
-    } else {
-      // للشاشات المتوسطة والكبيرة: أزرار أفقية مع تمرير
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: buttons.map((btn) {
-            return Container(
-              margin: const EdgeInsets.only(right: 6),
-              child: OutlinedButton.icon(
-                onPressed: btn['action'] as VoidCallback,
-                icon: Icon(
-                  btn['icon'] as IconData,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildMobileStatItem(IconData icon, String label, String value) {
+    return Column(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: const Color(0xFF62C6D9),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1E293B),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileActionButton(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onPressed, {
+    bool isDanger = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          colors: [
+            color.withOpacity(0.1),
+            color.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
                   size: 16,
-                  color: (btn['isDanger'] as bool?) == true
-                      ? Colors.redAccent
-                      : (btn['color'] ?? const Color(0xFF62C6D9)),
+                  color: color,
                 ),
-                label: Text(
-                  btn['label'] as String,
+                const SizedBox(width: 6),
+                Text(
+                  label,
                   style: TextStyle(
                     fontSize: 12,
-                    color: (btn['isDanger'] as bool?) == true
-                        ? Colors.redAccent
-                        : (btn['color'] ?? const Color(0xFF62C6D9)),
-                    fontWeight: FontWeight.w500,
+                    color: color,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  side: BorderSide(
-                    color: ((btn['isDanger'] as bool?) == true
-                            ? Colors.redAccent
-                            : (btn['color'] ?? const Color(0xFF62C6D9)))
-                        .withOpacity(0.3),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
+              ],
+            ),
+          ),
         ),
-      );
-    }
+      ),
+    );
+  }
+
+  Widget _buildStatChip(IconData icon, String text, bool isLargeScreen) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isLargeScreen ? 8 : 6,
+        vertical: isLargeScreen ? 5 : 3,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(isLargeScreen ? 8 : 6),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon, 
+            size: isLargeScreen ? 14 : 12, 
+            color: Colors.grey[600]
+          ),
+          SizedBox(width: isLargeScreen ? 6 : 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: isLargeScreen ? 13 : 11,
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailStat(String label, String value, IconData icon, bool isLargeScreen) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              icon, 
+              size: isLargeScreen ? 14 : 12, 
+              color: Colors.grey[500]
+            ),
+            SizedBox(width: isLargeScreen ? 6 : 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: isLargeScreen ? 12 : 10,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: isLargeScreen ? 4 : 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isLargeScreen ? 14 : 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF1E293B),
+          ),
+        ),
+      ],
+    );
   }
 }

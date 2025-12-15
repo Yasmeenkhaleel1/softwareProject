@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import 'expert_earnings_page.dart';
+import 'my_availability_page.dart';
 
 import '../widgets/stat_card.dart';
 import '../config/api_config.dart';
@@ -24,7 +26,8 @@ class ExpertDashboardPage extends StatefulWidget {
   State<ExpertDashboardPage> createState() => _ExpertDashboardPageState();
 }
 
-class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
+class _ExpertDashboardPageState extends State<ExpertDashboardPage>
+    with SingleTickerProviderStateMixin {
   // ========================
   // STATE
   // ========================
@@ -43,6 +46,66 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   int _mobileBottomNavIndex = 0;
 
   bool get _isMobile => MediaQuery.of(context).size.width < 768;
+  late TabController _webTabController;
+
+  // قائمة الأيقونات للويب
+  final List<IconData> _webTabIcons = [
+    Icons.dashboard,
+    Icons.person,
+    Icons.work,
+    Icons.event,
+    Icons.group,
+    Icons.account_balance_wallet,
+    Icons.schedule,
+  ];
+
+  // قائمة العناوين للويب
+  final List<String> _webTabLabels = [
+    'Overview',
+    'Profile',
+    'Services',
+    'Bookings',
+    'Customers',
+    'Earnings',
+    'Availability',
+  ];
+
+  // ========================
+  // WEB TAB NAVIGATION
+  // ========================
+  void _onWebTabTapped(int index) {
+    switch (index) {
+      case 0:
+        // Overview → نفس الصفحة
+        break;
+      case 1:
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const ViewExpertProfilePage()));
+        break;
+      case 2:
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const MyServicesPage()));
+        break;
+      case 3:
+        Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const MyBookingTab()));
+        break;
+      case 4:
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const ExpertCustomersPage()));
+        break;
+      case 5:
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const ExpertEarningsPage()));
+        break;
+      case 6:
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const MyAvailabilityPage()));
+        break;
+    }
+  }
 
   // ========================
   // INIT
@@ -50,9 +113,16 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   @override
   void initState() {
     super.initState();
+    _webTabController = TabController(length: 7, vsync: this);
     _loadMe();
     _loadDashboardStats();
     _fetchNotifications();
+  }
+
+  @override
+  void dispose() {
+    _webTabController.dispose();
+    super.dispose();
   }
 
   // ========================
@@ -167,7 +237,8 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
     if (draftObj != null) _openEditor(draftObj);
   }
 
-  Future<Map<String, dynamic>?> _createDraftFromApproved(Map<String, dynamic> approved) async {
+  Future<Map<String, dynamic>?> _createDraftFromApproved(
+      Map<String, dynamic> approved) async {
     try {
       final token = await _getToken();
       final body = {
@@ -306,6 +377,32 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
           });
         });
         break;
+      case 5: // Earnings
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const ExpertEarningsPage(),
+          ),
+        ).then((_) {
+          setState(() {
+            _mobileBottomNavIndex = 0;
+            _mainTabIndex = 0;
+          });
+        });
+        break;
+      case 6: // Availability
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const MyAvailabilityPage(),
+          ),
+        ).then((_) {
+          setState(() {
+            _mobileBottomNavIndex = 0;
+            _mainTabIndex = 0;
+          });
+        });
+        break;
     }
   }
 
@@ -326,34 +423,30 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
       final draft = _me!['draftProfile'];
       final profile = _me!['profile'];
 
-      displayName =
-          approved?['name'] ??
+      displayName = approved?['name'] ??
           pending?['name'] ??
           draft?['name'] ??
           profile?['name'] ??
           "Expert";
 
-      specialization =
-          approved?['specialization'] ??
+      specialization = approved?['specialization'] ??
           pending?['specialization'] ??
           draft?['specialization'] ??
           profile?['specialization'] ??
           "";
 
-      bio =
-          approved?['bio'] ??
+      bio = approved?['bio'] ??
           pending?['bio'] ??
           draft?['bio'] ??
           profile?['bio'] ??
           "";
 
       // ✅ الحل النهائي للصورة
-      String? rawImageUrl =
-          approved?['profileImageUrl'] ??
+      String? rawImageUrl = approved?['profileImageUrl'] ??
           pending?['profileImageUrl'] ??
           draft?['profileImageUrl'] ??
           profile?['profileImageUrl'];
-      
+
       imageUrl = rawImageUrl != null && rawImageUrl.isNotEmpty
           ? ApiConfig.fixAssetUrl(rawImageUrl)
           : null;
@@ -365,8 +458,42 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Expert Dashboard"),
+        title: const Text("Expert Dashboard",style: TextStyle(color: Colors.white),),
         backgroundColor: const Color(0xFF3CB8D4),
+
+        // ✅ TabBar للويب فقط - مع أيقونات وتحسينات
+        bottom: !_isMobile
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(60),
+                child: Container(
+                  color: const Color(0xFF3CB8D4), // لون الخلفية الأزرق
+                  child: TabBar(
+                    controller: _webTabController,
+                     isScrollable: false, 
+                    indicatorColor: Colors.white,
+                    indicatorWeight: 3,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white.withOpacity(0.7),
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    tabs: List.generate(
+                      _webTabLabels.length,
+                      (index) => Tab(
+                        icon: Icon(
+                          _webTabIcons[index],
+                          size: 20,
+                        ),
+                        text: _webTabLabels[index],
+                      ),
+                    ),
+                    onTap: (index) => _onWebTabTapped(index),
+                  ),
+                ),
+              )
+            : null,
+
         actions: [
           IconButton(
             icon: const Icon(Icons.message),
@@ -431,17 +558,17 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
             // ===== PROFILE CARD =====
             _buildProfileCard(displayName, specialization, bio, imageUrl),
             const SizedBox(height: 24),
-            
+
             // ===== DASHBOARD TITLE =====
             const Text(
               "Dashboard Overview",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            
+
             // ===== STATS GRID =====
             _buildStatsGrid(),
-            
+
             // ===== QUICK ACTIONS (Mobile only) =====
             if (_isMobile) ...[
               const SizedBox(height: 24),
@@ -500,7 +627,8 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
                             if (loadingProgress == null) return child;
                             return Center(
                               child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
+                                value: loadingProgress.expectedTotalBytes !=
+                                        null
                                     ? loadingProgress.cumulativeBytesLoaded /
                                         loadingProgress.expectedTotalBytes!
                                     : null,
@@ -572,39 +700,56 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   // STATS GRID
   // ========================
   Widget _buildStatsGrid() {
-    return GridView.count(
-      crossAxisCount: _isMobile ? 1 : 3,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: _isMobile ? 1.2 : 1.5,
-      children: [
-        StatCard(
-          title: 'Services',
-          value: '$totalServices',
-          icon: Icons.home_repair_service,
-          color: const Color(0xFF3CB8D4),
-          subtitle: 'Active services',
-          trend: '+2 this week',
-        ),
-        StatCard(
-          title: 'Clients',
-          value: '$totalClients',
-          icon: Icons.group,
-          color: const Color(0xFF2F8CA5),
-          subtitle: 'Total clients',
-          trend: '+5 this month',
-        ),
-        StatCard(
-          title: 'Bookings',
-          value: '$totalBookings',
-          icon: Icons.event_available,
-          color: const Color(0xFF285E6E),
-          subtitle: 'Active bookings',
-          trend: '3 pending',
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+
+        int crossAxisCount;
+
+        if (width >= 1100) {
+          crossAxisCount = 4;
+        } else if (width >= 800) {
+          crossAxisCount = 3;
+        } else {
+          // 📱 موبايل
+          crossAxisCount = 2;
+        }
+
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: _isMobile ? 0.95 : 1.25,
+          children: [
+            StatCard(
+              title: 'Services',
+              value: '$totalServices',
+              icon: Icons.home_repair_service,
+              color: const Color(0xFF3CB8D4),
+              subtitle: 'Active services',
+              trend: '+2 this week',
+            ),
+            StatCard(
+              title: 'Clients',
+              value: '$totalClients',
+              icon: Icons.group,
+              color: const Color(0xFF2F8CA5),
+              subtitle: 'Total clients',
+              trend: '+5 this month',
+            ),
+            StatCard(
+              title: 'Bookings',
+              value: '$totalBookings',
+              icon: Icons.event_available,
+              color: const Color(0xFF285E6E),
+              subtitle: 'Active bookings',
+              trend: '3 pending',
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -638,6 +783,14 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
         BottomNavigationBarItem(
           icon: Icon(Icons.group),
           label: 'Customers',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.account_balance_wallet),
+          label: 'Earnings',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.schedule),
+          label: 'Availability',
         ),
       ],
     );
@@ -695,42 +848,42 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
     );
   }
 
-  Widget _buildQuickActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: const Color(0xFF3CB8D4),
-              size: 24,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+Widget _buildQuickActionButton({
+  required IconData icon,
+  required String label,
+  required VoidCallback onTap,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+          ),
+        ],
       ),
-    );
-  }
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFF3CB8D4),
+            size: 24,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    ),
+  );
 }
+    }
