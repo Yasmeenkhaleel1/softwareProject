@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+
+import '../config/api_config.dart'; // ✅ أضيفي هذا import
 
 class ExpertProfilePage extends StatefulWidget {
   final Map<String, dynamic>? existingProfile;
@@ -31,9 +35,9 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
   List<String> _galleryUrls = [];
   String? _profileImageUrl;
 
-  static const baseUrl = "http://localhost:5000";
+  // ✅ استخدمي ApiConfig مباشرة
+  String get baseUrl => ApiConfig.baseUrl;
 
-  // ✅ قراءة التوكن المحفوظ بعد تسجيل الدخول
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
@@ -49,225 +53,215 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
       specializationController.text = p['specialization'] ?? '';
       experienceController.text = p['experience']?.toString() ?? '';
       locationController.text = p['location'] ?? '';
-      _profileImageUrl = p['profileImageUrl'];
-      _certificateUrls = List<String>.from(p['certificates'] ?? []);
-      _galleryUrls = List<String>.from(p['gallery'] ?? []);
+      
+      // ✅ أصلحي روابط الصور عند التحميل
+      _profileImageUrl = ApiConfig.fixAssetUrl(p['profileImageUrl']);
+      _certificateUrls = List<String>.from(p['certificates'] ?? [])
+          .map((url) => ApiConfig.fixAssetUrl(url))
+          .toList();
+      _galleryUrls = List<String>.from(p['gallery'] ?? [])
+          .map((url) => ApiConfig.fixAssetUrl(url))
+          .toList();
     }
   }
 
-  // ---------- Upload Certificates ----------
+  // ================= UPLOAD CERTIFICATES =================
   Future<void> _pickAndUploadCertificates() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
-      );
-      if (result == null || result.files.isEmpty) return;
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+    );
+    if (result == null) return;
 
-      setState(() => _isUploadingCerts = true);
-      final uri = Uri.parse("$baseUrl/api/upload/certificates");
-      final request = http.MultipartRequest('POST', uri);
+    setState(() => _isUploadingCerts = true);
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse("$baseUrl/api/upload/certificates"),
+      );
 
       for (final f in result.files) {
-        if (f.bytes == null) continue;
-        request.files.add(http.MultipartFile.fromBytes(
-          'certificates',
-          f.bytes!,
-          filename: f.name,
-        ));
+        if (kIsWeb) {
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'certificates',
+              f.bytes!,
+              filename: f.name,
+            ),
+          );
+        } else {
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'certificates',
+              f.path!,
+              filename: f.name,
+            ),
+          );
+        }
       }
 
-      final streamed = await request.send();
-      final resp = await http.Response.fromStream(streamed);
+      final resp = await http.Response.fromStream(await request.send());
 
       if (resp.statusCode == 201) {
         final decoded = jsonDecode(resp.body);
-        final files =
-            (decoded['files'] as List).map((e) => e['url'] as String).toList();
-        setState(() => _certificateUrls.addAll(files));
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Certificates uploaded successfully!')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: ${resp.body}')),
-        );
+        final files = (decoded['files'] as List)
+            .map((e) => e['url'] as String)
+            .toList();
+        
+        // ✅ أصلحي الروابط قبل الإضافة
+        final fixedFiles = files.map((url) => ApiConfig.fixAssetUrl(url)).toList();
+        
+        setState(() => _certificateUrls.addAll(fixedFiles));
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unexpected error: $e')),
-      );
     } finally {
-      if (mounted) setState(() => _isUploadingCerts = false);
+      setState(() => _isUploadingCerts = false);
     }
   }
 
-  // ---------- Upload Gallery ----------
+  // ================= UPLOAD GALLERY =================
   Future<void> _pickAndUploadGallery() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.image,
-      );
-      if (result == null || result.files.isEmpty) return;
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.image,
+    );
+    if (result == null) return;
 
-      setState(() => _isUploadingGallery = true);
-      final uri = Uri.parse("$baseUrl/api/upload/gallery");
-      final request = http.MultipartRequest('POST', uri);
+    setState(() => _isUploadingGallery = true);
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse("$baseUrl/api/upload/gallery"),
+      );
 
       for (final f in result.files) {
-        if (f.bytes == null) continue;
-        request.files.add(http.MultipartFile.fromBytes(
-          'gallery',
-          f.bytes!,
-          filename: f.name,
-        ));
+        if (kIsWeb) {
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'gallery',
+              f.bytes!,
+              filename: f.name,
+            ),
+          );
+        } else {
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'gallery',
+              f.path!,
+              filename: f.name,
+            ),
+          );
+        }
       }
 
-      final streamed = await request.send();
-      final resp = await http.Response.fromStream(streamed);
+      final resp = await http.Response.fromStream(await request.send());
 
       if (resp.statusCode == 201) {
         final decoded = jsonDecode(resp.body);
-        final files =
-            (decoded['files'] as List).map((e) => e['url'] as String).toList();
-        setState(() => _galleryUrls.addAll(files));
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gallery images uploaded successfully!')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: ${resp.body}')),
-        );
+        final files = (decoded['files'] as List)
+            .map((e) => e['url'] as String)
+            .toList();
+        
+        // ✅ أصلحي الروابط قبل الإضافة
+        final fixedFiles = files.map((url) => ApiConfig.fixAssetUrl(url)).toList();
+        
+        setState(() => _galleryUrls.addAll(fixedFiles));
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unexpected error: $e')),
-      );
     } finally {
-      if (mounted) setState(() => _isUploadingGallery = false);
+      setState(() => _isUploadingGallery = false);
     }
   }
 
-  // ---------- Upload Profile Image ----------
+  // ================= UPLOAD PROFILE IMAGE =================
   Future<void> _pickAndUploadProfileImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+    if (result == null) return;
+
+    setState(() => _isUploadingAvatar = true);
+
     try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: false,
-        type: FileType.image,
-      );
-      if (result == null || result.files.isEmpty) return;
-
-      setState(() => _isUploadingAvatar = true);
-      final uri = Uri.parse("$baseUrl/api/upload/profile");
-      final request = http.MultipartRequest('POST', uri);
-
       final file = result.files.first;
-      if (file.bytes == null) return;
-      request.files.add(http.MultipartFile.fromBytes(
-        'avatar',
-        file.bytes!,
-        filename: file.name,
-      ));
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse("$baseUrl/api/upload/profile"),
+      );
 
-      final streamed = await request.send();
-      final resp = await http.Response.fromStream(streamed);
+      if (kIsWeb) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'avatar',
+            file.bytes!,
+            filename: file.name,
+          ),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'avatar',
+            file.path!,
+            filename: file.name,
+          ),
+        );
+      }
+
+      final resp = await http.Response.fromStream(await request.send());
 
       if (resp.statusCode == 201) {
-        final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
-        final url =
-            (decoded['file'] as Map<String, dynamic>)['url'] as String;
-        setState(() => _profileImageUrl = url);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile image uploaded successfully!')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: ${resp.body}')),
-        );
+        final decoded = jsonDecode(resp.body);
+        // ✅ أصلحي الرابط قبل حفظه
+        final fixedUrl = ApiConfig.fixAssetUrl(decoded['file']['url']);
+        setState(() => _profileImageUrl = fixedUrl);
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unexpected error: $e')),
-      );
     } finally {
-      if (mounted) setState(() => _isUploadingAvatar = false);
+      setState(() => _isUploadingAvatar = false);
     }
   }
 
-  // ---------- Submit ----------
+  // ================= SUBMIT PROFILE =================
   Future<void> _submitProfile() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isSubmitting = true);
 
     try {
       final token = await getToken();
-      if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("⚠️ User not logged in.")),
-        );
-        return;
-      }
+      if (token == null) return;
 
-      final exp = int.tryParse(experienceController.text.trim()) ?? 0;
       final payload = {
         "name": nameController.text.trim(),
         "bio": bioController.text.trim(),
         "specialization": specializationController.text.trim(),
-        "experience": exp,
+        "experience":
+            int.tryParse(experienceController.text.trim()) ?? 0,
         "location": locationController.text.trim(),
         "profileImageUrl": _profileImageUrl,
         "certificates": _certificateUrls,
         "gallery": _galleryUrls,
       };
 
-      final headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $token",
-      };
-
-      final isEditing = widget.existingProfile != null;
-      final url = isEditing
-          ? "$baseUrl/api/expertProfiles/${widget.existingProfile!['_id']}"
-          : "$baseUrl/api/expertProfiles";
-
-      final uri = Uri.parse(url);
-      final resp = isEditing
-          ? await http.patch(uri, headers: headers, body: jsonEncode(payload))
-          : await http.post(uri, headers: headers, body: jsonEncode(payload));
+      final resp = await http.post(
+        Uri.parse("$baseUrl/api/expertProfiles"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: jsonEncode(payload),
+      );
 
       if (resp.statusCode == 200 || resp.statusCode == 201) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isEditing
-                ? "Profile updated successfully."
-                : "Profile submitted for admin review."),
-            backgroundColor: const Color(0xFF62C6D9),
-          ),
-        );
-
-        await Future.delayed(const Duration(seconds: 1));
-        Navigator.pushReplacementNamed(context, '/waiting_approval');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text("Error: ${resp.body}"),
-              backgroundColor: Colors.redAccent),
-        );
+        Navigator.pushReplacementNamed(
+            context, '/waiting_approval');
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text("Unexpected error: $e"),
-            backgroundColor: Colors.redAccent),
-      );
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      setState(() => _isSubmitting = false);
     }
   }
 
-  // ---------- UI ----------
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 800;
@@ -302,7 +296,7 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
     );
   }
 
-  // ---------- Main Layout ----------
+  // ================= REST OF YOUR UI CODE =================
   List<Widget> _buildContent(bool isMobile) {
     return [
       Expanded(
@@ -354,8 +348,8 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
                     style: const TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF62C6D9),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 25, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20)),
                 ),
@@ -368,16 +362,18 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
                       children: [
                         Expanded(
                           child: InkWell(
-                            onTap: () async => await launchUrl(Uri.parse(url)),
+                            onTap: () async =>
+                                await launchUrl(Uri.parse(url)),
                             child: Text("• $url",
                                 style: const TextStyle(
                                     color: Colors.blueAccent,
-                                    decoration: TextDecoration.underline)),
+                                    decoration: TextDecoration.underline),
+                                overflow: TextOverflow.ellipsis),
                           ),
                         ),
                         IconButton(
-                          icon:
-                              const Icon(Icons.delete, color: Colors.red, size: 20),
+                          icon: const Icon(Icons.delete,
+                              color: Colors.red, size: 20),
                           onPressed: () {
                             setState(() => _certificateUrls.remove(url));
                           },
@@ -400,8 +396,8 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
                     style: const TextStyle(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF62C6D9),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 25, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20)),
                 ),
@@ -416,8 +412,31 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(url,
-                              width: 80, height: 80, fit: BoxFit.cover),
+                          child: Image.network(
+                            url,
+                            width: 80, 
+                            height: 80, 
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                width: 80,
+                                height: 80,
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.broken_image, color: Colors.grey),
+                              );
+                            },
+                          ),
                         ),
                         Positioned(
                           top: -6,
@@ -469,7 +488,7 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
           children: [
             CircleAvatar(
               radius: 80,
-              backgroundImage: _profileImageUrl == null
+              backgroundImage: _profileImageUrl == null || _profileImageUrl!.isEmpty
                   ? const AssetImage('assets/images/profile_placeholder.png')
                       as ImageProvider
                   : NetworkImage(_profileImageUrl!),

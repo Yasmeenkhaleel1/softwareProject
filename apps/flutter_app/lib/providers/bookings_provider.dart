@@ -5,8 +5,14 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/booking.dart';
 class BookingsProvider with ChangeNotifier {
-static const baseUrl = 'http://localhost:5000/api';
-List<Booking> items = [];
+static String get baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:5000/api';
+    } else {
+      return 'http://10.0.2.2:5000/api';
+    }
+  }
+  List<Booking> items = [];
 int total = 0;
 int page = 1;
 int pages = 1;

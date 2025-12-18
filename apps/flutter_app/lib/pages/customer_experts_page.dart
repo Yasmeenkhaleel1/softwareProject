@@ -151,8 +151,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
           builder: (_) => ChatPage(
             conversationId: convId,
             otherUserName: expert.name,
-            otherUserAvatar:
-                expert.avatarUrl.isNotEmpty ? expert.avatarUrl : null,
+            otherUserAvatar: expert.avatarUrl.isNotEmpty ? expert.avatarUrl : null,
           ),
         ),
       );
@@ -304,11 +303,9 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                             : RefreshIndicator(
                                 onRefresh: _loadExpertsFromBookings,
                                 child: ListView.separated(
-                                  padding: const EdgeInsets.fromLTRB(
-                                      4, 8, 4, 16),
+                                  padding: const EdgeInsets.fromLTRB(4, 8, 4, 16),
                                   itemCount: _experts.length,
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(height: 10),
+                                  separatorBuilder: (_, __) => const SizedBox(height: 10),
                                   itemBuilder: (context, index) {
                                     final expert = _experts[index];
                                     return _buildExpertCard(expert);
@@ -339,8 +336,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
         final avatar = CircleAvatar(
           radius: 26,
           backgroundColor: _brand.withOpacity(0.15),
-          backgroundImage:
-              expert.avatarUrl.isNotEmpty ? NetworkImage(expert.avatarUrl) : null,
+          backgroundImage: expert.avatarUrl.isNotEmpty ? NetworkImage(expert.avatarUrl) : null,
           child: expert.avatarUrl.isEmpty
               ? Text(
                   expert.name.isNotEmpty ? expert.name[0].toUpperCase() : '?',
@@ -375,41 +371,68 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
                   ),
                 ),
               const SizedBox(height: 4),
-              Wrap(
-                spacing: 12,
-                runSpacing: 4,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.event_available,
-                          size: 16, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text(
-                        "Bookings: ${expert.totalBookings}",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
+
+              // ✅✅✅ FIX: منع RenderFlex overflow على الموبايل (بدون تغيير اللوجيك)
+              LayoutBuilder(
+                builder: (context, c) {
+                  final tooNarrow = c.maxWidth < 220;
+
+                  Widget statRow({
+                    required IconData icon,
+                    required String text,
+                  }) {
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icon, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
                         ),
+                      ],
+                    );
+                  }
+
+                  if (tooNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        statRow(
+                          icon: Icons.event_available,
+                          text: "Bookings: ${expert.totalBookings}",
+                        ),
+                        const SizedBox(height: 4),
+                        statRow(
+                          icon: Icons.access_time,
+                          text: "Last: $lastStr",
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: [
+                      statRow(
+                        icon: Icons.event_available,
+                        text: "Bookings: ${expert.totalBookings}",
+                      ),
+                      statRow(
+                        icon: Icons.access_time,
+                        text: "Last: $lastStr",
                       ),
                     ],
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.access_time,
-                          size: 16, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text(
-                        "Last: $lastStr",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  );
+                },
               ),
             ],
           ),
@@ -419,8 +442,7 @@ class _CustomerExpertsPageState extends State<CustomerExpertsPage> {
           onPressed: () => _openChatWithExpert(expert),
           style: FilledButton.styleFrom(
             backgroundColor: _brand,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(999),
             ),

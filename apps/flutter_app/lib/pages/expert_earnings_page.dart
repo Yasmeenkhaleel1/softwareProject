@@ -1,7 +1,12 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../api/api_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:intl/intl.dart';
+import 'dart:async';
 
 enum EarningsFilter {
   all,
@@ -20,16 +25,45 @@ class ExpertEarningsPage extends StatefulWidget {
 class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
   bool _loading = true;
   String? _error;
+  late SharedPreferences _prefs;
+
+  // ✅ إصلاح baseUrl ليعمل على الويب والمحمول
+  String get baseUrl {
+    if (kIsWeb) {
+      // للويب - استخدم localhost أو عنوان الخادم
+      return "http://localhost:5000";
+    } else {
+      // للإميوليتر أو الجهاز الحقيقي
+      try {
+        // جرب الإميوليتر أولاً
+        return "http://10.0.2.2:5000";
+      } catch (e) {
+        // إذا فشل، جرب localhost
+        return "http://localhost:5000";
+      }
+    }
+  }
 
   EarningsFilter _currentFilter = EarningsFilter.all;
-
   Map<String, dynamic>? _summary;
   List<dynamic> _payments = [];
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _initSharedPrefs();
+  }
+
+  Future<void> _initSharedPrefs() async {
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      await _loadData();
+    } catch (e) {
+      setState(() {
+        _error = "Failed to initialize: $e";
+        _loading = false;
+      });
+    }
   }
 
   /// تحديد from/to حسب الفلتر المختار
@@ -59,34 +93,111 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
+
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
+      final token = _prefs.getString('token');
+      
+      // ✅ إذا لم يوجد token، أظهر رسالة
+      if (token == null || token.isEmpty) {
+        setState(() {
+          _error = "Please login to view earnings";
+          _loading = false;
+        });
+        return;
+      }
+
       final range = _rangeForFilter(_currentFilter);
-      final s = await ApiService.getExpertEarningsSummary(
-        from: range['from'],
-        to: range['to'],
-      );
-      final p = await ApiService.getExpertPayments(
-        from: range['from'],
-        to: range['to'],
-      );
+
+      final params = <String, String>{};
+      if (range['from'] != null) {
+        params['from'] = DateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+            .format(range['from']!.toUtc());
+      }
+      if (range['to'] != null) {
+        params['to'] = DateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+            .format(range['to']!.toUtc());
+      }
+
+      debugPrint("Loading data from: $baseUrl");
+      debugPrint("Filter: $_currentFilter");
+      debugPrint("Params: $params");
+
+      // ===== SUMMARY =====
+      final summaryUri = Uri.parse("$baseUrl/api/expert/earnings/summary")
+          .replace(queryParameters: params);
+
+      final summaryRes = await http.get(
+        summaryUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint("Summary Status: ${summaryRes.statusCode}");
+      debugPrint("Summary Body: ${summaryRes.body}");
+
+      if (summaryRes.statusCode >= 400) {
+        throw Exception("Failed to load earnings summary: ${summaryRes.statusCode}");
+      }
+
+      final summary = jsonDecode(summaryRes.body) as Map<String, dynamic>;
+
+      // ===== PAYMENTS =====
+      final paymentsUri = Uri.parse("$baseUrl/api/expert/earnings/payments")
+          .replace(queryParameters: params);
+
+      final paymentsRes = await http.get(
+        paymentsUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint("Payments Status: ${paymentsRes.statusCode}");
+
+      if (paymentsRes.statusCode >= 400) {
+        throw Exception("Failed to load payments: ${paymentsRes.statusCode}");
+      }
+
+      final paymentsBody = jsonDecode(paymentsRes.body) as Map<String, dynamic>;
+
+      if (!mounted) return;
 
       setState(() {
-        _summary = s;
-        _payments = p;
+        _summary = summary;
+        _payments = (paymentsBody['items'] as List<dynamic>?) ?? [];
+        _loading = false;
       });
-    } catch (e) {
+
+    } on http.ClientException catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = "Network error: ${e.message}\nPlease check if server is running at $baseUrl";
+        _loading = false;
       });
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      debugPrint("ClientException: $e");
+    } on TimeoutException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = "Request timeout\nServer at $baseUrl is not responding";
+        _loading = false;
+      });
+      debugPrint("TimeoutException: $e");
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = "Error: ${e.toString()}";
+        _loading = false;
+      });
+      debugPrint("Error loading earnings: $e");
     }
   }
 
@@ -96,13 +207,18 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Earnings"),
+        title: const Text(
+          "My Earnings",
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: primary,
         elevation: 4,
+        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
+            tooltip: "Refresh",
           )
         ],
       ),
@@ -113,29 +229,60 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return Center(
+      return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 40),
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _loadData,
-              child: const Text("Retry"),
-            ),
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text("Loading earnings data..."),
           ],
         ),
       );
     }
 
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 60),
+              const SizedBox(height: 16),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _loadData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF62C6D9),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                ),
+                child: const Text(
+                  "Retry",
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (kIsWeb)
+                const Text(
+                  "Make sure CORS is enabled on your server",
+                  style: TextStyle(color: Colors.grey),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final isMobile = MediaQuery.of(context).size.width < 700;
     final s = _summary ?? {};
     final totalRevenue = (s['totalRevenue'] ?? 0).toDouble();
     final totalPlatformFees = (s['totalPlatformFees'] ?? 0).toDouble();
@@ -146,40 +293,44 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
     return RefreshIndicator(
       onRefresh: _loadData,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 12 : 24,
+          vertical: isMobile ? 12 : 20,
+        ),
         children: [
           _filterChips(),
-          const SizedBox(height: 16),
+          SizedBox(height: isMobile ? 16 : 24),
           _headerCard(totalNetToExpert, bookingsCount),
-          const SizedBox(height: 16),
-          _statsRow(totalRevenue, totalPlatformFees, totalNetToExpert, paymentsCount),
-          const SizedBox(height: 20),
+          SizedBox(height: isMobile ? 16 : 24),
+          _statsRow(totalRevenue, totalPlatformFees, totalNetToExpert),
+          SizedBox(height: isMobile ? 20 : 28),
           _chartsSection(totalRevenue, totalPlatformFees, totalNetToExpert),
-          const SizedBox(height: 24),
+          SizedBox(height: isMobile ? 20 : 28),
           const Text(
-            "Timeline",
+            "Recent Activity",
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 16,
+              fontSize: 18,
               color: Color(0xFF285E6E),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: isMobile ? 8 : 12),
           _timelineSection(),
-          const SizedBox(height: 24),
+          SizedBox(height: isMobile ? 20 : 28),
           const Text(
-            "Payments history",
+            "Payments History",
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 16,
+              fontSize: 18,
               color: Color(0xFF285E6E),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: isMobile ? 8 : 12),
           if (_payments.isEmpty)
             _emptyPaymentsCard()
           else
             ..._payments.map((p) => _paymentTile(p)).toList(),
+          SizedBox(height: isMobile ? 20 : 28),
         ],
       ),
     );
@@ -187,24 +338,36 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
 
   // ------------------ FILTER CHIPS ------------------
   Widget _filterChips() {
-    const primary = Color(0xFF62C6D9);
+    final isMobile = MediaQuery.of(context).size.width < 700;
 
     Widget chip(EarningsFilter f, String label, IconData icon) {
       final selected = _currentFilter == f;
-      return ChoiceChip(
+      return FilterChip(
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16),
-            const SizedBox(width: 4),
-            Text(label),
+            Icon(icon, size: isMobile ? 16 : 18),
+            SizedBox(width: isMobile ? 4 : 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: isMobile ? 13 : 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
         selected: selected,
-        selectedColor: primary,
+        selectedColor: const Color(0xFF62C6D9),
+        backgroundColor: Colors.white,
+        shape: StadiumBorder(
+          side: BorderSide(
+            color: selected ? const Color(0xFF62C6D9) : Colors.grey.shade300,
+            width: 1,
+          ),
+        ),
         labelStyle: TextStyle(
           color: selected ? Colors.white : Colors.black87,
-          fontWeight: FontWeight.w500,
         ),
         onSelected: (v) {
           if (!v) return;
@@ -216,48 +379,45 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Row(
+      child: Wrap(
+        spacing: isMobile ? 8 : 12,
         children: [
-          chip(EarningsFilter.all, "All", Icons.all_inclusive),
-          const SizedBox(width: 8),
+          chip(EarningsFilter.all, "All Time", Icons.all_inclusive),
           chip(EarningsFilter.today, "Today", Icons.today),
-          const SizedBox(width: 8),
-          chip(EarningsFilter.thisWeek, "This week", Icons.date_range),
-          const SizedBox(width: 8),
-          chip(EarningsFilter.thisMonth, "This month", Icons.calendar_month),
+          chip(EarningsFilter.thisWeek, "This Week", Icons.date_range),
+          chip(EarningsFilter.thisMonth, "This Month", Icons.calendar_month),
         ],
       ),
     );
   }
 
-  // ------------------ HEADER CARD (Animated Gradient + Numbers) ------------------
+  // ------------------ HEADER CARD ------------------
   Widget _headerCard(double netToExpert, int bookingsCount) {
-    final randomSeed = netToExpert.toInt() + bookingsCount;
-    final angle = (randomSeed % 360) * pi / 180;
+    final isMobile = MediaQuery.of(context).size.width < 700;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: netToExpert),
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1000),
+      curve: Curves.easeOut,
       builder: (context, value, child) {
         return Container(
-          padding: const EdgeInsets.all(18),
+          padding: EdgeInsets.all(isMobile ? 20 : 24),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: LinearGradient(
-              colors: const [
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              colors: [
                 Color(0xFF62C6D9),
                 Color(0xFF347C8B),
                 Color(0xFF244C63),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              transform: GradientRotation(angle),
             ),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Colors.black26,
-                blurRadius: 10,
-                offset: Offset(0, 5),
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -266,46 +426,62 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
-                  Icons.account_balance_wallet_rounded,
+                  Icons.account_balance_wallet,
                   color: Colors.white,
                   size: 32,
                 ),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: isMobile ? 16 : 20),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Available earnings",
+                      "Available Balance",
                       style: TextStyle(
                         color: Colors.white70,
-                        fontSize: 13,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: isMobile ? 4 : 8),
                     Text(
                       "\$${value.toStringAsFixed(2)}",
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 28,
+                        fontSize: isMobile ? 32 : 36,
                         fontWeight: FontWeight.bold,
+                        height: 1,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      "$bookingsCount completed sessions",
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                      ),
+                    SizedBox(height: isMobile ? 8 : 12),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          color: Colors.white70,
+                          size: 16,
+                        ),
+                        SizedBox(width: isMobile ? 6 : 8),
+                        Text(
+                          "$bookingsCount completed sessions",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_forward_ios, color: Colors.white),
+                onPressed: () {},
               ),
             ],
           ),
@@ -314,30 +490,73 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
     );
   }
 
-  // ------------------ STATS ROW (Animated Cards) ------------------
+  // ------------------ STATS ROW ------------------
   Widget _statsRow(
     double totalRevenue,
     double totalPlatformFees,
     double netToExpert,
-    int paymentsCount,
   ) {
+    final isMobile = MediaQuery.of(context).size.width < 700;
+
+    if (isMobile) {
+      return Column(
+        children: [
+          _statCard(
+            title: "Total Revenue",
+            value: totalRevenue,
+            icon: Icons.attach_money,
+            color: Colors.green,
+            subtitle: "From all bookings",
+          ),
+          SizedBox(height: isMobile ? 12 : 16),
+          _statCard(
+            title: "Platform Fees",
+            value: totalPlatformFees,
+            icon: Icons.account_balance,
+            color: Colors.orange,
+            subtitle: "Service charges",
+          ),
+          SizedBox(height: isMobile ? 12 : 16),
+          _statCard(
+            title: "Your Earnings",
+            value: netToExpert,
+            icon: Icons.person,
+            color: Colors.blue,
+            subtitle: "After fees",
+          ),
+        ],
+      );
+    }
+
     return Row(
       children: [
         Expanded(
           child: _statCard(
-            title: "Total revenue",
+            title: "Total Revenue",
             value: totalRevenue,
-            icon: Icons.attach_money_rounded,
-            color: Colors.teal,
+            icon: Icons.attach_money,
+            color: Colors.green,
+            subtitle: "From all bookings",
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: isMobile ? 12 : 16),
         Expanded(
           child: _statCard(
-            title: "Platform fee",
+            title: "Platform Fees",
             value: totalPlatformFees,
             icon: Icons.account_balance,
-            color: Colors.deepOrange,
+            color: Colors.orange,
+            subtitle: "Service charges",
+          ),
+        ),
+        SizedBox(width: isMobile ? 12 : 16),
+        Expanded(
+          child: _statCard(
+            title: "Your Earnings",
+            value: netToExpert,
+            icon: Icons.person,
+            color: Colors.blue,
+            subtitle: "After fees",
           ),
         ),
       ],
@@ -349,52 +568,70 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
     required double value,
     required IconData icon,
     required Color color,
+    String subtitle = "",
   }) {
+    final isMobile = MediaQuery.of(context).size.width < 700;
+
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: value),
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeOut,
       builder: (context, animatedValue, child) {
         return Container(
-          padding: const EdgeInsets.all(14),
+          padding: EdgeInsets.all(isMobile ? 16 : 20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
               BoxShadow(
-                color: Colors.black12,
-                blurRadius: 8,
-                offset: Offset(0, 4),
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(14),
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color),
+                child: Icon(icon, color: color, size: 24),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: isMobile ? 12 : 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: isMobile ? 12 : 13,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: isMobile ? 4 : 6),
                     Text(
                       "\$${animatedValue.toStringAsFixed(2)}",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                        fontSize: isMobile ? 18 : 20,
                         color: Colors.black87,
                       ),
                     ),
+                    if (subtitle.isNotEmpty) ...[
+                      SizedBox(height: isMobile ? 2 : 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: isMobile ? 11 : 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -411,184 +648,260 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
     double totalPlatformFees,
     double netToExpert,
   ) {
-    if (_payments.isEmpty) {
+    final isMobile = MediaQuery.of(context).size.width < 700;
+    final hasData = totalRevenue > 0 || totalPlatformFees > 0 || netToExpert > 0;
+
+    if (!hasData || _payments.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isMobile ? 20 : 24),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
             BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: Offset(0, 4),
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: const Text(
-          "No chart data available yet.",
-          style: TextStyle(color: Colors.grey),
+        child: Column(
+          children: [
+            Icon(
+              Icons.bar_chart,
+              color: Colors.grey.shade400,
+              size: 60,
+            ),
+            SizedBox(height: 12),
+            Text(
+              "No chart data available",
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Complete some bookings to see your earnings analytics",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 900;
-
-        return Column(
-          children: [
-            // Line + Pie
-            Flex(
-              direction: isWide ? Axis.horizontal : Axis.vertical,
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: _lineChartCard(),
-                ),
-                const SizedBox(width: 12, height: 12),
-                Expanded(
-                  child: _pieChartCard(totalRevenue, totalPlatformFees, netToExpert),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Bar chart
-            _barChartCard(totalRevenue, totalPlatformFees, netToExpert),
-          ],
-        );
-      },
-    );
-  }
-
-  // Line Chart: cumulative net earnings
-  Widget _lineChartCard() {
-    // نحضّر البيانات
-    double running = 0;
-    final spots = <FlSpot>[];
-    final paymentsSorted = [..._payments];
-    paymentsSorted.sort((a, b) {
-      final da = DateTime.tryParse(a['createdAt']?.toString() ?? '') ?? DateTime.now();
-      final db = DateTime.tryParse(b['createdAt']?.toString() ?? '') ?? DateTime.now();
-      return da.compareTo(db);
-    });
-
-    for (var i = 0; i < paymentsSorted.length; i++) {
-      final p = paymentsSorted[i];
-      final net = (p['netToExpert'] ?? 0).toDouble();
-      running += net;
-      spots.add(FlSpot(i.toDouble(), running));
-    }
-
-    return Container(
-      height: 220,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Earnings over time",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: Color(0xFF285E6E),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(show: true, horizontalInterval: spots.length > 0 ? (spots.last.y / 4).clamp(1, double.infinity) : 1),
-                borderData: FlBorderData(
-                  show: true,
-                  border: const Border(
-                    left: BorderSide(color: Colors.black12),
-                    bottom: BorderSide(color: Colors.black12),
-                    right: BorderSide(color: Colors.transparent),
-                    top: BorderSide(color: Colors.transparent),
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  leftTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: true, reservedSize: 40),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: (spots.length / 4).clamp(1, double.infinity),
-                      getTitlesWidget: (val, meta) {
-                        final index = val.toInt();
-                        if (index < 0 || index >= paymentsSorted.length) {
-                          return const SizedBox.shrink();
-                        }
-                        final dateStr =
-                            (paymentsSorted[index]['createdAt'] ?? '').toString();
-                        return Text(
-                          dateStr.split('T').first,
-                          style: const TextStyle(fontSize: 9),
-                        );
-                      },
-                    ),
-                  ),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    barWidth: 3,
-                    dotData: FlDotData(show: false),
-                   belowBarData: BarAreaData(
-  show: true,
-  color: Colors.blue.withOpacity(0.15),
-),
-
-                  ),
-                ],
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.all(isMobile ? 16 : 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Earnings Overview",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Color(0xFF285E6E),
+                ),
+              ),
+              SizedBox(height: isMobile ? 16 : 20),
+              SizedBox(
+                height: isMobile ? 200 : 250,
+                child: _buildBarChart(totalRevenue, totalPlatformFees, netToExpert),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: isMobile ? 16 : 20),
+        Container(
+          padding: EdgeInsets.all(isMobile ? 16 : 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Earnings Distribution",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Color(0xFF285E6E),
+                ),
+              ),
+              SizedBox(height: isMobile ? 16 : 20),
+              SizedBox(
+                height: isMobile ? 200 : 250,
+                child: _buildPieChart(totalRevenue, totalPlatformFees, netToExpert),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBarChart(
+    double totalRevenue,
+    double totalPlatformFees,
+    double netToExpert,
+  ) {
+    final maxVal = [totalRevenue, totalPlatformFees, netToExpert].reduce(max) * 1.2;
+
+    return BarChart(
+      BarChartData(
+        maxY: maxVal,
+        minY: 0,
+        gridData: FlGridData(
+          show: true,
+          drawHorizontalLine: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(
+              color: Colors.grey.shade200,
+              strokeWidth: 1,
+            );
+          },
+        ),
+        borderData: FlBorderData(
+          show: true,
+          border: Border.all(
+            color: Colors.grey.shade300,
+            width: 1,
+          ),
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              getTitlesWidget: (value, meta) {
+                return Text(
+                  '\$${value.toInt()}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                );
+              },
             ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                String label;
+                switch (value.toInt()) {
+                  case 0:
+                    label = 'Revenue';
+                    break;
+                  case 1:
+                    label = 'Fees';
+                    break;
+                  case 2:
+                    label = 'Earnings';
+                    break;
+                  default:
+                    label = '';
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  )
+                );
+            
+              },
+            ),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+        ),
+        barGroups: [
+          BarChartGroupData(
+            x: 0,
+            barRods: [
+              BarChartRodData(
+                toY: totalRevenue,
+                color: Colors.green.shade400,
+                width: 20,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+          ),
+          BarChartGroupData(
+            x: 1,
+            barRods: [
+              BarChartRodData(
+                toY: totalPlatformFees,
+                color: Colors.orange.shade400,
+                width: 20,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+          ),
+          BarChartGroupData(
+            x: 2,
+            barRods: [
+              BarChartRodData(
+                toY: netToExpert,
+                color: Colors.blue.shade400,
+                width: 20,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // Pie Chart: platform vs expert
-  Widget _pieChartCard(
-      double totalRevenue, double totalPlatformFees, double netToExpert) {
+  Widget _buildPieChart(
+    double totalRevenue,
+    double totalPlatformFees,
+    double netToExpert,
+  ) {
     final total = totalPlatformFees + netToExpert;
+    
     if (total <= 0) {
-      return Container(
-        height: 220,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Center(
-          child: Text(
-            "No distribution data yet.",
-            style: TextStyle(color: Colors.grey),
-          ),
+      return const Center(
+        child: Text(
+          "No distribution data",
+          style: TextStyle(color: Colors.grey),
         ),
       );
     }
@@ -596,294 +909,241 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
     final expertPercent = (netToExpert / total) * 100;
     final platformPercent = (totalPlatformFees / total) * 100;
 
-    return Container(
-      height: 220,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 30,
-                sections: [
-                  PieChartSectionData(
-                    value: netToExpert,
-                    title: "${expertPercent.toStringAsFixed(0)}%",
-                    radius: 55,
-                    titleStyle: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
+    return Row(
+      children: [
+        Expanded(
+          child: PieChart(
+            PieChartData(
+              sectionsSpace: 2,
+              centerSpaceRadius: 40,
+              sections: [
+                PieChartSectionData(
+                  value: netToExpert,
+                  title: "${expertPercent.toStringAsFixed(0)}%\nYou",
+                  radius: 60,
+                  color: Colors.blue.shade400,
+                  titleStyle: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
-                  PieChartSectionData(
-                    value: totalPlatformFees,
-                    title: "${platformPercent.toStringAsFixed(0)}%",
-                    radius: 45,
-                    titleStyle: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
+                  titlePositionPercentageOffset: 0.6,
+                ),
+                PieChartSectionData(
+                  value: totalPlatformFees,
+                  title: "${platformPercent.toStringAsFixed(0)}%\nPlatform",
+                  radius: 50,
+                  color: Colors.orange.shade400,
+                  titleStyle: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                   ),
-                ],
-              ),
+                  titlePositionPercentageOffset: 0.6,
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _legendDot(color: Colors.blue, label: "To expert"),
-              const SizedBox(height: 4),
-              _legendDot(color: Colors.orange, label: "Platform"),
-            ],
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 20),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _legendItem(
+              color: Colors.blue.shade400,
+              label: "Your Earnings",
+              value: netToExpert,
+            ),
+            const SizedBox(height: 12),
+            _legendItem(
+              color: Colors.orange.shade400,
+              label: "Platform Fees",
+              value: totalPlatformFees,
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _legendDot({required Color color, required String label}) {
+  Widget _legendItem({
+    required Color color,
+    required String label,
+    required double value,
+  }) {
     return Row(
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 16,
+          height: 16,
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
           ),
         ),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ],
-    );
-  }
-
-  // Bar chart: comparison of totals
-  Widget _barChartCard(
-      double totalRevenue, double totalPlatformFees, double netToExpert) {
-    if (totalRevenue <= 0 && (totalPlatformFees <= 0 && netToExpert <= 0)) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: Offset(0, 4),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+            Text(
+              "\$${value.toStringAsFixed(2)}",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
             ),
           ],
         ),
-        child: const Text(
-          "No bar chart data yet.",
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-
-    final maxVal =
-        [totalRevenue, totalPlatformFees, netToExpert].reduce(max).clamp(1, double.infinity);
-
-    return Container(
-      height: 220,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Overview",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: Color(0xFF285E6E),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: BarChart(
-              BarChartData(
-                maxY: maxVal.toDouble(),
-
-                borderData: FlBorderData(
-                  show: true,
-                  border: const Border(
-                    left: BorderSide(color: Colors.black12),
-                    bottom: BorderSide(color: Colors.black12),
-                  ),
-                ),
-                gridData: const FlGridData(show: true),
-                titlesData: FlTitlesData(
-                  leftTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: true, reservedSize: 40),
-                  ),
-                  rightTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (val, meta) {
-                        switch (val.toInt()) {
-                          case 0:
-                            return const Text("Revenue", style: TextStyle(fontSize: 10));
-                          case 1:
-                            return const Text("Platform", style: TextStyle(fontSize: 10));
-                          case 2:
-                            return const Text("Expert", style: TextStyle(fontSize: 10));
-                          default:
-                            return const SizedBox.shrink();
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                barGroups: [
-                  BarChartGroupData(
-                    x: 0,
-                    barRods: [BarChartRodData(toY: totalRevenue)],
-                  ),
-                  BarChartGroupData(
-                    x: 1,
-                    barRods: [BarChartRodData(toY: totalPlatformFees)],
-                  ),
-                  BarChartGroupData(
-                    x: 2,
-                    barRods: [BarChartRodData(toY: netToExpert)],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
   // ------------------ TIMELINE SECTION ------------------
   Widget _timelineSection() {
+    final isMobile = MediaQuery.of(context).size.width < 700;
+    
     if (_payments.isEmpty) {
-      return _emptyPaymentsCard();
+      return _emptySectionCard(
+        icon: Icons.timeline,
+        title: "No activity yet",
+        message: "Your recent activity will appear here",
+      );
     }
 
-    final items = _payments.take(5).toList();
+    final recentPayments = _payments.take(3).toList();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isMobile ? 16 : 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
           BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 4),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
-        children: items.asMap().entries.map((entry) {
+        children: recentPayments.asMap().entries.map((entry) {
           final index = entry.key;
           final p = entry.value;
 
           final amount = (p['amount'] ?? 0).toDouble();
           final net = (p['netToExpert'] ?? 0).toDouble();
           final status = (p['status'] ?? '').toString();
-          final createdAt = p['createdAt']?.toString() ?? '';
+          final createdAt = _formatDate(p['createdAt']?.toString() ?? '');
+          final serviceTitle = p['service']?['title']?.toString() ?? 'Service';
 
           Color statusColor;
+          IconData statusIcon;
           switch (status) {
             case "CAPTURED":
               statusColor = Colors.green;
+              statusIcon = Icons.check_circle;
               break;
             case "AUTHORIZED":
               statusColor = Colors.orange;
+              statusIcon = Icons.pending;
               break;
             case "REFUNDED":
               statusColor = Colors.red;
+              statusIcon = Icons.refresh;
               break;
             default:
               statusColor = Colors.grey;
+              statusIcon = Icons.circle;
           }
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // الخط + الدائرة
-              Column(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: statusColor,
-                      shape: BoxShape.circle,
-                    ),
+          return Container(
+            padding: EdgeInsets.symmetric(vertical: isMobile ? 12 : 16),
+            decoration: BoxDecoration(
+              border: index < recentPayments.length - 1
+                  ? Border(
+                      bottom: BorderSide(
+                        color: Colors.grey.shade200,
+                        width: 1,
+                      ),
+                    )
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  if (index != items.length - 1)
-                    Container(
-                      width: 2,
-                      height: 34,
-                      color: Colors.grey.withOpacity(0.3),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Icon(statusIcon, color: statusColor, size: 20),
+                ),
+                SizedBox(width: isMobile ? 12 : 16),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "\$${net.toStringAsFixed(2)} to you",
+                        serviceTitle,
                         style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF285E6E),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        "Total: \$${amount.toStringAsFixed(2)} • Status: $status",
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 4),
                       Text(
                         createdAt,
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      "\$${net.toStringAsFixed(2)}",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.green,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        status,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           );
         }).toList(),
       ),
@@ -892,27 +1152,54 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
 
   // ------------------ PAYMENTS LIST ------------------
   Widget _emptyPaymentsCard() {
+    return _emptySectionCard(
+      icon: Icons.payments,
+      title: "No payments yet",
+      message: "Your payment history will appear here",
+    );
+  }
+
+  Widget _emptySectionCard({
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: Offset(0, 3),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: const Row(
+      child: Column(
         children: [
-          Icon(Icons.info_outline, color: Colors.grey),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              "No payments yet for this period.",
-              style: TextStyle(color: Colors.grey),
+          Icon(
+            icon,
+            color: Colors.grey.shade400,
+            size: 48,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 14,
             ),
           ),
         ],
@@ -921,111 +1208,192 @@ class _ExpertEarningsPageState extends State<ExpertEarningsPage> {
   }
 
   Widget _paymentTile(dynamic p) {
+    final isMobile = MediaQuery.of(context).size.width < 700;
+    
     final amount = (p['amount'] ?? 0).toDouble();
     final net = (p['netToExpert'] ?? 0).toDouble();
     final fee = (p['platformFee'] ?? 0).toDouble();
     final status = (p['status'] ?? '').toString();
-    final createdAt = p['createdAt']?.toString() ?? '';
-    final serviceTitle =
-        p['service']?['title']?.toString() ?? 'Service payment';
+    final createdAt = _formatDate(p['createdAt']?.toString() ?? '');
+    final serviceTitle = p['service']?['title']?.toString() ?? 'Service Payment';
+    final bookingId = p['booking']?['id']?.toString() ?? '';
 
-    Color chipColor;
-    String chipText;
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
 
     switch (status) {
       case "CAPTURED":
-        chipColor = Colors.green;
-        chipText = "Captured";
+        statusColor = Colors.green;
+        statusText = "Completed";
+        statusIcon = Icons.check_circle;
         break;
       case "AUTHORIZED":
-        chipColor = Colors.orange;
-        chipText = "Authorized";
-        break;
-      case "REFUND_PENDING":
-        chipColor = Colors.deepOrange;
-        chipText = "Refund pending";
+        statusColor = Colors.orange;
+        statusText = "Pending";
+        statusIcon = Icons.pending;
         break;
       case "REFUNDED":
-        chipColor = Colors.red;
-        chipText = "Refunded";
+        statusColor = Colors.red;
+        statusText = "Refunded";
+        statusIcon = Icons.refresh;
         break;
       default:
-        chipColor = Colors.grey;
-        chipText = status;
+        statusColor = Colors.grey;
+        statusText = status;
+        statusIcon = Icons.circle;
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: isMobile ? 12 : 16),
+      padding: EdgeInsets.all(isMobile ? 16 : 20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: Offset(0, 3),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF62C6D9).withOpacity(0.08),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.payment, color: Color(0xFF285E6E)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  serviceTitle,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF285E6E),
-                  ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                serviceTitle,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Color(0xFF285E6E),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  "\$${net.toStringAsFixed(2)} to you",
-                  style: const TextStyle(fontSize: 13),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  "Total: \$${amount.toStringAsFixed(2)}  •  Platform: \$${fee.toStringAsFixed(2)}",
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  createdAt,
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: chipColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              chipText,
-              style: TextStyle(
-                color: chipColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(statusIcon, color: statusColor, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: isMobile ? 8 : 12),
+          Text(
+            "Booking #${bookingId.substring(0, min(8, bookingId.length))}",
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 13,
+            ),
+          ),
+          SizedBox(height: isMobile ? 12 : 16),
+          Row(
+            children: [
+              _paymentDetailItem(
+                icon: Icons.attach_money,
+                label: "Total",
+                value: "\$${amount.toStringAsFixed(2)}",
+                color: Colors.green,
+              ),
+              SizedBox(width: isMobile ? 16 : 24),
+              _paymentDetailItem(
+                icon: Icons.account_balance,
+                label: "Platform Fee",
+                value: "\$${fee.toStringAsFixed(2)}",
+                color: Colors.orange,
+              ),
+              SizedBox(width: isMobile ? 16 : 24),
+              _paymentDetailItem(
+                icon: Icons.person,
+                label: "Your Earnings",
+                value: "\$${net.toStringAsFixed(2)}",
+                color: Colors.blue,
+              ),
+            ],
+          ),
+          SizedBox(height: isMobile ? 12 : 16),
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_today,
+                color: Colors.grey,
+                size: 14,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                createdAt,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paymentDetailItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: color,
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString).toLocal();
+      return DateFormat('MMM dd, yyyy • hh:mm a').format(date);
+    } catch (e) {
+      return dateString;
+    }
   }
 }

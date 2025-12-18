@@ -1,6 +1,7 @@
 // lib/pages/expert/my_availability_page.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // أضف هذه المكتبة لاستخدام kIsWeb
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -13,7 +14,17 @@ class MyAvailabilityPage extends StatefulWidget {
 }
 
 class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
-  static const baseUrl = "http://localhost:5000/api";
+  // ✅ دالة baseUrl ديناميكية للويب والموبايل
+  String get baseUrl {
+    if (kIsWeb) {
+      return "http://localhost:5000";
+    } else {
+      // للموبايل (Android emulator)
+      return "http://10.0.2.2:5000";
+    }
+  }
+
+  String get apiBaseUrl => "$baseUrl/api"; // ✅ أضف هذا للراحة
 
   bool loading = true;
   bool saving = false;
@@ -50,7 +61,7 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     try {
       final token = await _getToken();
       final res = await http.get(
-        Uri.parse("$baseUrl/expert/availability/me"),
+        Uri.parse("$apiBaseUrl/expert/availability/me"),
         headers: {"Authorization": "Bearer $token"},
       );
 
@@ -114,7 +125,7 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
       };
 
       final res = await http.put(
-        Uri.parse("$baseUrl/expert/availability/me"),
+        Uri.parse("$apiBaseUrl/expert/availability/me"),
         headers: {
           "Authorization": "Bearer $token",
           "Content-Type": "application/json",
@@ -191,6 +202,8 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final bool isWide = constraints.maxWidth >= 980;
+                final bool isMobile = !kIsWeb && constraints.maxWidth < 700;
+
                 return SingleChildScrollView(
                   child: Column(
                     children: [
@@ -217,17 +230,39 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
           ),
         ),
       ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: Row(
+ bottomNavigationBar: SafeArea(
+  child: Padding(
+    padding: const EdgeInsets.all(16),
+    child: LayoutBuilder(
+      builder: (context, c) {
+        final bool mobile = c.maxWidth < 600;
+
+        if (mobile) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildBufferSelector(),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: _buildSaveButton(),
+              ),
+            ],
+          );
+        }
+
+        return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _buildBufferSelector(),
             _buildSaveButton(),
           ],
-        ),
-      ),
-    );
+        );
+      },
+    ),
+  ),
+),
+);
   }
 
   // ============================
@@ -267,82 +302,109 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
   List<Widget> _buildWeekDays() {
     return days.map((d) {
       final bool active = d['active'] == true;
+return Container(
+  margin: const EdgeInsets.symmetric(vertical: 6),
+  padding: const EdgeInsets.all(12),
+  decoration: BoxDecoration(
+    color: active ? const Color(0xFFE0F2FE) : Colors.white,
+    borderRadius: BorderRadius.circular(14),
+    border: Border.all(
+      color: active ? const Color(0xFF38BDF8) : const Color(0xFFE5E7EB),
+    ),
+  ),
+  child: LayoutBuilder(
+    builder: (context, c) {
+      final bool mobile = c.maxWidth < 500;
 
-      return Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFFE0F2FE) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: active ? const Color(0xFF38BDF8) : const Color(0xFFE5E7EB),
-          ),
-        ),
-        child: Row(
+      // ================= MOBILE =================
+      if (mobile) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Switch + Day
-            Expanded(
-              flex: 3,
-              child: Row(
-                children: [
-                  Switch(
-                    inactiveThumbColor: Colors.grey.shade400,
-                    inactiveTrackColor: Colors.grey.shade300,
-                    activeColor: const Color(0xFF0EA5E9),
-                    value: active,
-                    onChanged: (v) => setState(() => d['active'] = v),
+            Row(
+              children: [
+                Switch(
+                  value: active,
+                  activeColor: const Color(0xFF0EA5E9),
+                  onChanged: (v) => setState(() => d['active'] = v),
+                ),
+                Text(
+                  d['label'],
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: active ? Colors.black : Colors.grey,
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    d['label'],
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: active ? const Color(0xFF0F172A) : Colors.grey,
-                    ),
+                ),
+                const Spacer(),
+                Text(
+                  active ? "ON" : "OFF",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: active ? Colors.green : Colors.red,
                   ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: active
-                          ? const Color(0xFFDCFCE7)
-                          : const Color(0xFFFEE2E2),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      active ? "ON" : "OFF",
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: active
-                            ? const Color(0xFF16A34A)
-                            : const Color(0xFFDC2626),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            // Time range
-            Expanded(
-              flex: 4,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _buildTimeField(d, true),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Text("—"),
-                  ),
-                  _buildTimeField(d, false),
-                ],
-              ),
+            const SizedBox(height: 8),
+            // Time row
+            Row(
+              children: [
+                Expanded(child: _buildTimeField(d, true)),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Text("—"),
+                ),
+                Expanded(child: _buildTimeField(d, false)),
+              ],
             ),
           ],
-        ),
+        );
+      }
+
+      // ================= WEB =================
+      return Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                Switch(
+                  value: active,
+                  activeColor: const Color(0xFF0EA5E9),
+                  onChanged: (v) => setState(() => d['active'] = v),
+                ),
+                Text(
+                  d['label'],
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: active ? Colors.black : Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _buildTimeField(d, true),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Text("—"),
+                ),
+                _buildTimeField(d, false),
+              ],
+            ),
+          ),
+        ],
       );
-    }).toList();
+    },
+  ),
+);
+ }).toList();
   }
 
   Widget _buildTimeField(Map<String, dynamic> d, bool isStart) {

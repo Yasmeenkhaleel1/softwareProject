@@ -10,8 +10,7 @@ class ServicePublicPreviewPage extends StatefulWidget {
   const ServicePublicPreviewPage({super.key, required this.service});
 
   @override
-  State<ServicePublicPreviewPage> createState() =>
-      _ServicePublicPreviewPageState();
+  State<ServicePublicPreviewPage> createState() => _ServicePublicPreviewPageState();
 }
 
 class _ServicePublicPreviewPageState extends State<ServicePublicPreviewPage> {
@@ -23,15 +22,12 @@ class _ServicePublicPreviewPageState extends State<ServicePublicPreviewPage> {
     _ratingAvg = (widget.service['ratingAvg'] ?? 0).toDouble();
   }
 
-  Future<void> _showDialog(
-      BuildContext context, String title, String message) async {
+  Future<void> _showDialog(BuildContext context, String title, String message) async {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title:
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(message),
         actions: [
           TextButton(
@@ -43,6 +39,13 @@ class _ServicePublicPreviewPageState extends State<ServicePublicPreviewPage> {
     );
   }
 
+  // ===== UI constants (design only) =====
+  static const Color themeBlue = Color(0xFF62C6D9);
+  static const Color ink = Color(0xFF0F172A);
+  static const Color muted = Color(0xFF64748B);
+
+  bool get isMobile => MediaQuery.of(context).size.width < 860;
+
   @override
   Widget build(BuildContext context) {
     final service = widget.service;
@@ -51,325 +54,539 @@ class _ServicePublicPreviewPageState extends State<ServicePublicPreviewPage> {
         ? images.first
         : "https://cdn-icons-png.flaticon.com/512/3135/3135715.png";
 
-    final themeBlue = const Color(0xFF62C6D9);
+    final title = (service['title'] ?? "Service Preview").toString();
+    final category = (service['category'] ?? "SERVICE").toString();
+    final duration = (service['durationMinutes'] ?? 0).toString();
+    final price = (service['price'] ?? 0).toString();
+    final currency = (service['currency'] ?? "USD").toString();
+    final desc = (service['description'] ?? "...").toString();
+
+    final maxW = isMobile ? 980.0 : 1180.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F6F8),
       appBar: AppBar(
-        elevation: 4,
+        elevation: 0,
         backgroundColor: themeBlue,
-        title: Text(
-          service['title'] ?? "Service Preview",
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
-        ),
         iconTheme: const IconThemeData(color: Colors.white),
+        title: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.16),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.remove_red_eye_outlined, color: Colors.white, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
 
-      // ✅ مركز الصفحة وعرض ثابت للويب فقط
       body: Center(
-        child: Container(
-          width: 1100,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxW),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 40),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ================= HEADER IMAGE =================
-                Stack(
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      height: 350,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                    Container(
-                      height: 350,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.center,
-                          colors: [
-                            Colors.black.withOpacity(.55),
-                            Colors.transparent
-                          ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 25,
-                      left: 25,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(.65),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          service['category'] ?? "SERVICE",
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              letterSpacing: 1),
-                        ),
-                      ),
-                    )
-                  ],
+                // ================= HERO =================
+                _HeroHeader(
+                  imageUrl: imageUrl,
+                  category: category,
+                  isMobile: isMobile,
                 ),
 
-                // ================= TITLE CARD =================
-                Container(
-                  transform: Matrix4.translationValues(0, -18, 0),
-                  padding: const EdgeInsets.all(24),
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black12.withOpacity(.08),
-                          blurRadius: 15)
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        service['title'] ?? "",
-                        style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black87),
-                      ),
-                      const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
-                      // ✅ Wrap بدل Row لمنع overflow
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 8,
-                        children: [
-                          Chip(
-                            backgroundColor: themeBlue.withOpacity(.15),
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
+                // ================= CONTENT GRID =================
+                LayoutBuilder(
+                  builder: (context, c) {
+                    final wide = c.maxWidth >= 980;
+
+                    final left = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SaasCard(
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.timer,
-                                    size: 17, color: themeBlue),
-                                const SizedBox(width: 6),
-                                Text("${service['durationMinutes']} min"),
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: ink,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: [
+                                    _Pill(
+                                      icon: Icons.timer_outlined,
+                                      text: "$duration min",
+                                      bg: themeBlue.withOpacity(0.12),
+                                      fg: themeBlue,
+                                    ),
+                                    _Pill(
+                                      icon: Icons.star_rounded,
+                                      text: "${_ratingAvg.toStringAsFixed(1)} ★",
+                                      bg: Colors.amber.withOpacity(0.14),
+                                      fg: Colors.amber.shade800,
+                                    ),
+                                    _Pill(
+                                      icon: Icons.category_outlined,
+                                      text: category,
+                                      bg: Colors.indigo.withOpacity(0.10),
+                                      fg: Colors.indigo,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                const Divider(height: 1),
+                                const SizedBox(height: 14),
+                                const Text(
+                                  "About this service",
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: ink),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  desc,
+                                  style: const TextStyle(
+                                    color: ink,
+                                    height: 1.6,
+                                    fontSize: 15,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                          Chip(
-                            backgroundColor: Colors.amber.withOpacity(.15),
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // ================= RATING =================
+                        _SaasCard(
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.star,
-                                    size: 17, color: Colors.amber),
-                                const SizedBox(width: 6),
-                                Text("${_ratingAvg.toStringAsFixed(1)} ★"),
+                                Row(
+                                  children: const [
+                                    Icon(Icons.star_outline, color: Colors.amber),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "Rate this service",
+                                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: ink),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  "Your rating helps customers choose and improves quality.",
+                                  style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                                ),
+                                const SizedBox(height: 14),
+                                RatingBar.builder(
+                                  initialRating: _ratingAvg,
+                                  allowHalfRating: true,
+                                  itemCount: 5,
+                                  itemSize: 34,
+                                  unratedColor: Colors.grey.shade300,
+                                  itemBuilder: (_, __) => const Icon(Icons.star, color: Colors.amber),
+                                  onRatingUpdate: (rating) async {
+                                    // ✅ نفس اللوجيك
+                                    final prefs = await SharedPreferences.getInstance();
+                                    final token = prefs.getString('token') ?? '';
+                                    if (token.isEmpty) {
+                                      _showDialog(context, "Login Required", "Please log in to rate services.");
+                                      return;
+                                    }
+
+                                    setState(() => _ratingAvg = rating);
+
+                                    final res = await http.post(
+                                      Uri.parse(
+                                        "http://localhost:5000/api/services/${service['_id']}/rate",
+                                      ),
+                                      headers: {
+                                        'Authorization': 'Bearer $token',
+                                        'Content-Type': 'application/json'
+                                      },
+                                      body: jsonEncode({'rating': rating}),
+                                    );
+
+                                    if (res.statusCode == 200) {
+                                      final body = jsonDecode(res.body);
+                                      setState(() {
+                                        _ratingAvg = body['ratingAvg']?.toDouble() ?? rating;
+                                      });
+                                      _showDialog(context, "Success", "⭐ Rated (${_ratingAvg.toStringAsFixed(1)})");
+                                    } else {
+                                      _showDialog(context, "Error", "Error: ${res.body}");
+                                    }
+                                  },
+                                ),
                               ],
+                            ),
+                          ),
+                        ),
+
+                        // ================= GALLERY =================
+                        if (images.length > 1) ...[
+                          const SizedBox(height: 14),
+                          _SaasCard(
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: const [
+                                      Icon(Icons.photo_library_outlined, color: ink),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        "Gallery",
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: ink),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    height: 148,
+                                    child: ListView.separated(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: images.length,
+                                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                      itemBuilder: (_, i) {
+                                        return MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(16),
+                                            child: CachedNetworkImage(
+                                              imageUrl: images[i],
+                                              width: 210,
+                                              fit: BoxFit.cover,
+                                              placeholder: (_, __) => Container(
+                                                width: 210,
+                                                color: Colors.grey.shade200,
+                                                child: const Center(child: CircularProgressIndicator()),
+                                              ),
+                                              errorWidget: (_, __, ___) => Container(
+                                                width: 210,
+                                                color: Colors.grey.shade200,
+                                                child: const Center(child: Icon(Icons.broken_image_outlined)),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
-                      ),
-
-                      const SizedBox(height: 20),
-                      Text(
-                        service['description'] ?? "...",
-                        style: const TextStyle(
-                            color: Colors.black87,
-                            height: 1.6,
-                            fontSize: 16),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ================= PRICE CARD =================
-              Container(
-  margin: const EdgeInsets.symmetric(horizontal: 24),
-  padding: const EdgeInsets.all(26),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(18),
-    border: Border.all(color: Colors.grey.shade200),
-    boxShadow: [
-      BoxShadow(
-          color: Colors.black12.withOpacity(.05),
-          blurRadius: 10)
-    ],
-  ),
-  child: Row(
-    children: [
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Price", style: TextStyle(color: Colors.black87)),
-          Text(
-            "${service['price']} ${service['currency']}",
-            style: const TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87),
-          ),
-        ],
-      ),
-      const Spacer(),
-
-      // ✅ زر واضح على الويب
-      ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 180),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: ElevatedButton.icon(
-            onPressed: () => _showDialog(
-              context,
-              "Booking",
-              "Booking feature coming soon!",
-            ),
-            icon: const Icon(Icons.shopping_cart, color: Colors.white),
-            label: const Text(
-              "Book Now",
-              style: TextStyle(fontSize: 16, color: Colors.white),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: themeBlue,
-              elevation: 4,
-              shadowColor: Colors.black26,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 28,
-                vertical: 16,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ],
-  ),
-),
-
-
-                // ================= RATING BOX =================
-                const SizedBox(height: 24),
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
-                  padding: const EdgeInsets.all(26),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.grey.shade200),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black12.withOpacity(.05),
-                          blurRadius: 10)
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const Text("Rate this service",
-                          style: TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 14),
-                      RatingBar.builder(
-                        initialRating: _ratingAvg,
-                        allowHalfRating: true,
-                        itemCount: 5,
-                        itemSize: 34,
-                        unratedColor: Colors.grey.shade300,
-                        itemBuilder: (_, __) =>
-                            const Icon(Icons.star, color: Colors.amber),
-                        onRatingUpdate: (rating) async {
-                          final prefs =
-                              await SharedPreferences.getInstance();
-                          final token = prefs.getString('token') ?? '';
-                          if (token.isEmpty) {
-                            _showDialog(context, "Login Required",
-                                "Please log in to rate services.");
-                            return;
-                          }
-
-                          setState(() => _ratingAvg = rating);
-
-                          final res = await http.post(
-                            Uri.parse(
-                                "http://localhost:5000/api/services/${service['_id']}/rate"),
-                            headers: {
-                              'Authorization': 'Bearer $token',
-                              'Content-Type': 'application/json'
-                            },
-                            body: jsonEncode({'rating': rating}),
-                          );
-
-                          if (res.statusCode == 200) {
-                            final body = jsonDecode(res.body);
-                            setState(() {
-                              _ratingAvg =
-                                  body['ratingAvg']?.toDouble() ?? rating;
-                            });
-                            _showDialog(context, "Success",
-                                "⭐ Rated (${_ratingAvg.toStringAsFixed(1)})");
-                          } else {
-                            _showDialog(
-                                context, "Error", "Error: ${res.body}");
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ================= GALLERY =================
-                if (images.length > 1) ...[
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 24),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.image, color: Colors.black54),
-                        SizedBox(width: 6),
-                        Text("Gallery",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 18)),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 140,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.only(left: 24),
-                      itemCount: images.length,
-                      itemBuilder: (_, i) => MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 14),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: CachedNetworkImage(
-                              imageUrl: images[i],
-                              width: 180,
-                              fit: BoxFit.cover,
+                    );
+
+                    final right = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ================= PRICE / CTA =================
+                        _SaasCard(
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: const [
+                                    Icon(Icons.payments_outlined, color: ink),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "Pricing",
+                                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: ink),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Text("Price", style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      "$price ",
+                                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: ink),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Text(
+                                        currency,
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: muted),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  "Duration: $duration minutes",
+                                  style: const TextStyle(color: muted, fontSize: 13),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => _showDialog(
+                                      context,
+                                      "Booking",
+                                      "Booking feature coming soon!",
+                                    ),
+                                    icon: const Icon(Icons.shopping_cart, color: Colors.white),
+                                    label: const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 12),
+                                      child: Text(
+                                        "Book Now",
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+                                      ),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: themeBlue,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: themeBlue.withOpacity(0.10),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: themeBlue.withOpacity(0.18)),
+                                  ),
+                                  child: const Text(
+                                    "Tip: Add clear images + a detailed description to increase bookings.",
+                                    style: TextStyle(fontSize: 12.5, color: ink, height: 1.35),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                ],
+                      ],
+                    );
 
-                const SizedBox(height: 50),
+                    if (!wide) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          right,
+                          const SizedBox(height: 14),
+                          left,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: left),
+                        const SizedBox(width: 14),
+                        SizedBox(width: 360, child: right),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ====================== Components ======================
+
+class _SaasCard extends StatelessWidget {
+  final Widget child;
+  const _SaasCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+            color: Colors.black.withOpacity(0.05),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color bg;
+  final Color fg;
+
+  const _Pill({
+    required this.icon,
+    required this.text,
+    required this.bg,
+    required this.fg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: fg.withOpacity(0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: fg),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroHeader extends StatelessWidget {
+  final String imageUrl;
+  final String category;
+  final bool isMobile;
+
+  const _HeroHeader({
+    required this.imageUrl,
+    required this.category,
+    required this.isMobile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const themeBlue = Color(0xFF62C6D9);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: Stack(
+        children: [
+          CachedNetworkImage(
+            imageUrl: imageUrl,
+            height: isMobile ? 240 : 320,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            placeholder: (_, __) => Container(
+              height: isMobile ? 240 : 320,
+              color: Colors.grey.shade200,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+            errorWidget: (_, __, ___) => Container(
+              height: isMobile ? 240 : 320,
+              color: Colors.grey.shade200,
+              child: const Center(child: Icon(Icons.broken_image_outlined)),
+            ),
+          ),
+          Container(
+            height: isMobile ? 240 : 320,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.center,
+                colors: [
+                  Colors.black.withOpacity(.55),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 14,
+            left: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(.65),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withOpacity(0.12)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.category_outlined, size: 16, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text(
+                    category,
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.2),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            top: 14,
+            right: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              decoration: BoxDecoration(
+                color: themeBlue.withOpacity(0.90),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.verified_outlined, size: 16, color: Colors.white),
+                  SizedBox(width: 6),
+                  Text(
+                    "Preview",
+                    style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
