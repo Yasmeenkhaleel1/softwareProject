@@ -6,6 +6,7 @@ import {
   getOrCreateConversation,
   listMessagesForConversation,
   sendMessageInConversation,
+   getUnreadMessagesCount,
 } from "../controllers/message.controller.js";
 
 const router = Router();
@@ -16,6 +17,7 @@ const router = Router();
  */
 router.get("/conversations", auth(), listMyConversations);
 
+router.get("/unread-count", auth(), getUnreadMessagesCount);
 /**
  * 🔹 POST /api/messages/conversations
  * - إنشاء / إرجاع محادثة بين CUSTOMER & EXPERT

@@ -697,4 +697,19 @@ static Future<void> registerPushToken({
   }
 }
 
+
+static Future<int> fetchUnreadMessagesCount() async {
+  final token = await getToken(); // نفس طريقتك بجلب التوكن
+  final url = Uri.parse('${ApiConfig.baseUrl}/api/messages/unread-count');
+
+  final res = await http.get(url, headers: {
+    'Authorization': 'Bearer $token',
+  });
+
+  if (res.statusCode != 200) throw Exception('Failed to fetch unread count');
+
+  final j = jsonDecode(res.body);
+  return (j['count'] ?? 0) as int;
+}
+
 }

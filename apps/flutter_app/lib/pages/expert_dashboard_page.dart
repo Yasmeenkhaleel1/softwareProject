@@ -18,6 +18,7 @@ import 'my_availability_page.dart';
 import 'expert_earnings_page.dart';
 import '../config/api_config.dart';
 import '../services/notif_badge.dart';
+import '../services/message_badge.dart';
 import 'notifications_page.dart';
 class ExpertDashboardPage extends StatefulWidget {
   const ExpertDashboardPage({super.key});
@@ -61,6 +62,7 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
     super.initState();
     _loadAllData();
     NotifBadge.refresh();
+     MessageBadge.refresh();
   }
 
   Future<void> _loadAllData() async {
@@ -452,17 +454,48 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   }
 
 Widget _buildMessageButton() {
-  return IconButton(
-    icon: const Icon(Icons.message_outlined, color: Colors.white),
-    onPressed: () async {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ConversationsPage()),
-      );
-      // لو لاحقًا بدك badge للمسجات: بنعمل MessageBadge + API خاص بالـ unread chats
-    },
+  return Stack(
+    children: [
+      IconButton(
+        icon: const Icon(Icons.message_outlined, color: Colors.white),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ConversationsPage()),
+          );
+
+          await MessageBadge.refresh(); // ✅ بعد الرجوع
+        },
+      ),
+      Positioned(
+        right: 6,
+        top: 6,
+        child: ValueListenableBuilder<int>(
+          valueListenable: MessageBadge.unread,
+          builder: (context, count, _) {
+            if (count == 0) return const SizedBox();
+            return Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                "$count",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ],
   );
 }
+
 
 
 Widget _buildNotificationsButton() {

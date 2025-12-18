@@ -252,24 +252,41 @@ export const sendMessageInConversation = async (req, res) => {
     await conversation.save();
 
     // ✅ إشعار للمستقبل: رسالة جديدة (مكانه الصح)
-    try {
-      const sender = await User.findById(userId).select("name").lean();
-      const senderName = sender?.name || "Someone";
+   
+try {
+  const senderUser = await User.findById(userId).select("name email role").lean();
 
-      await notifyUser(to, {
-        title: "💬 New Message",
-        body: `${senderName}: ${preview}`,
-        data: {
-          type: "NEW_MESSAGE",
-          conversationId: String(conversation._id),
-          messageId: String(message._id),
-          fromUserId: String(userId),
-        },
-        link: `/messages/${conversation._id}`,
-      });
-    } catch (e) {
-      console.error("❌ notify message failed:", e.message);
-    }
+  let senderName = (senderUser?.name || "").trim();
+
+  // لو المرسل Expert واسم الـ User فاضي → جيبيه من ExpertProfile
+  if (!senderName && senderUser?.role === "EXPERT") {
+    const prof = await ExpertProfile.findOne({ userId, status: "approved" })
+      .select("name")
+      .lean();
+    senderName = (prof?.name || "").trim();
+  }
+
+  // fallback أخير: الإيميل قبل @
+  if (!senderName) {
+    senderName = (senderUser?.email || "Someone").split("@")[0];
+  }
+
+  await notifyUser(to, {
+    title: "💬 New Message",
+    body: `${senderName}: ${preview}`,
+    data: {
+      type: "NEW_MESSAGE",
+      conversationId: String(conversation._id),
+      messageId: String(message._id),
+      fromUserId: String(userId),
+      senderName, // ✅ اختياري مفيد للـ UI
+    },
+    link: `/messages/${conversation._id}`,
+  });
+} catch (e) {
+  console.error("❌ notify message failed:", e.message);
+}
+
 
     const fullMessage = await Message.findById(message._id)
       .populate("from", "name email profilePic role")
@@ -285,3 +302,31 @@ export const sendMessageInConversation = async (req, res) => {
     return res.status(e.status || 500).json({ message: e.message });
   }
 };
+
+/**
+ * GET /api/messages/unread-count
+ * - يرجع عدد الرسائل غير المقروءة للـ user الحالي (حسب unreadForCustomer / unreadForExpert)
+ */
+export const getUnreadMessagesCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const convs = await Conversation.find({
+      $or: [{ customer: userId }, { expert: userId }],
+    })
+      .select("customer expert unreadForCustomer unreadForExpert")
+      .lean();
+
+    let count = 0;
+    for (const c of convs) {
+      if (c.customer?.toString() === userId) count += Number(c.unreadForCustomer || 0);
+      else if (c.expert?.toString() === userId) count += Number(c.unreadForExpert || 0);
+    }
+
+    return res.json({ count });
+  } catch (e) {
+    console.error("❌ getUnreadMessagesCount error:", e);
+    return res.status(500).json({ message: "Server error", error: e.message });
+  }
+};
+

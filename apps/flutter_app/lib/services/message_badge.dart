@@ -1,14 +1,13 @@
 import 'package:flutter/foundation.dart';
+import '../../api/api_service.dart';
 
-// لاحقًا تربطيه بـ API unread chats
 class MessageBadge {
   static final ValueNotifier<int> unread = ValueNotifier<int>(0);
 
   static Future<void> refresh() async {
     try {
-      // TODO: نجيب العدد من API
-      // مثال: final c = await ChatAPI.getUnreadCount();
-      // unread.value = c;
+      final c = await ApiService.fetchUnreadMessagesCount();
+      unread.value = c;
     } catch (_) {}
   }
 
