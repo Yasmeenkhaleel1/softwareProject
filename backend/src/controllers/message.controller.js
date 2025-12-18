@@ -4,6 +4,7 @@ import Message from "../models/message.model.js";
 import User from "../models/user/user.model.js";
 import Booking from "../models/booking.model.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
+import { notifyUser } from "../services/push.service.js";
 
 /**
  * Helper: يتأكد إن اليوزر جزء من المحادثة
@@ -27,7 +28,6 @@ export const listMyConversations = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // 1) نجيب كل المحادثات تبعت هذا اليوزر
     let conversations = await Conversation.find({
       $or: [{ customer: userId }, { expert: userId }],
     })
@@ -36,16 +36,10 @@ export const listMyConversations = async (req, res) => {
       .populate("expert", "name email profilePic role")
       .lean();
 
-    // 2) نجهز قائمة IDs للـ Experts
     const expertUserIds = [
-      ...new Set(
-        conversations
-          .map((c) => c.expert?._id?.toString())
-          .filter(Boolean)
-      ),
+      ...new Set(conversations.map((c) => c.expert?._id?.toString()).filter(Boolean)),
     ];
 
-    // 3) نجيب البروفايل المعتمد لكل Expert
     const profiles = await ExpertProfile.find({
       userId: { $in: expertUserIds },
       status: "approved",
@@ -54,21 +48,15 @@ export const listMyConversations = async (req, res) => {
       .lean();
 
     const profileByUserId = {};
-    for (const p of profiles) {
-      profileByUserId[p.userId.toString()] = p;
-    }
+    for (const p of profiles) profileByUserId[p.userId.toString()] = p;
 
-    // 4) ندمج الاسم والصورة من ExpertProfile داخل expert في كل محادثة
     conversations = conversations.map((conv) => {
       if (conv.expert && conv.expert._id) {
         const expertId = conv.expert._id.toString();
         const prof = profileByUserId[expertId];
         if (prof) {
-          // ✅ لو مافي name في User نستخدم اسم البروفايل
           conv.expert.name = prof.name || conv.expert.name;
-          // ✅ لو مافي profilePic في User نستخدم صورة البروفايل
-          conv.expert.profilePic =
-            prof.profileImageUrl || conv.expert.profilePic;
+          conv.expert.profilePic = prof.profileImageUrl || conv.expert.profilePic;
         }
       }
       return conv;
@@ -81,15 +69,9 @@ export const listMyConversations = async (req, res) => {
   }
 };
 
-
 /**
  * POST /api/messages/conversations
- * Body (لو اليوزر CUSTOMER):
- *   { expertId }
- * Body (لو اليوزر EXPERT):
- *   { customerId }
- *
- * - يعمل get-or-create لمحادثة بين customer & expert
+ * - get-or-create للمحادثة بين customer & expert
  */
 export const getOrCreateConversation = async (req, res) => {
   try {
@@ -106,18 +88,13 @@ export const getOrCreateConversation = async (req, res) => {
       expertId = userId;
       customerId = req.body.customerId;
     } else {
-      return res
-        .status(403)
-        .json({ message: "Only CUSTOMER or EXPERT can start conversations." });
+      return res.status(403).json({ message: "Only CUSTOMER or EXPERT can start conversations." });
     }
 
     if (!customerId || !expertId) {
-      return res.status(400).json({
-        message: "Missing expertId or customerId in request body.",
-      });
+      return res.status(400).json({ message: "Missing expertId or customerId in request body." });
     }
 
-    // ✅ تأكد إن اليوزرين موجودين
     const [customer, expert] = await Promise.all([
       User.findById(customerId),
       User.findById(expertId),
@@ -126,7 +103,6 @@ export const getOrCreateConversation = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
-    // ✅ جديد: لازم يكون بينهم حجز واحد على الأقل
     const bookingExists = await Booking.exists({
       customer: customerId,
       expertUserId: expertId,
@@ -134,67 +110,55 @@ export const getOrCreateConversation = async (req, res) => {
 
     if (!bookingExists) {
       return res.status(403).json({
-        message:
-          "Messaging is allowed only between customers and experts who have at least one booking.",
+        message: "Messaging is allowed only between customers and experts who have at least one booking.",
       });
     }
 
-    // 🔁 نفس اللوجيك القديم: get-or-create للمحادثة
     let conversation = await Conversation.findOne({
       customer: customerId,
       expert: expertId,
     });
 
     if (!conversation) {
-      conversation = await Conversation.create({
-        customer: customerId,
-        expert: expertId,
-      });
+      conversation = await Conversation.create({ customer: customerId, expert: expertId });
     }
 
-   const conv = await Conversation.findById(conversation._id)
-  .populate("customer", "name email profilePic role")
-  .populate("expert", "name email profilePic role")
-  .lean();
+    const conv = await Conversation.findById(conversation._id)
+      .populate("customer", "name email profilePic role")
+      .populate("expert", "name email profilePic role")
+      .lean();
 
-// ✅ نحقن بيانات البروفايل المعتمد للخبير (لو موجود)
-if (conv.expert && conv.expert._id) {
-  const prof = await ExpertProfile.findOne({
-    userId: conv.expert._id,
-    status: "approved",
-  })
-    .select("name profileImageUrl")
-    .lean();
+    if (conv.expert && conv.expert._id) {
+      const prof = await ExpertProfile.findOne({
+        userId: conv.expert._id,
+        status: "approved",
+      })
+        .select("name profileImageUrl")
+        .lean();
 
-  if (prof) {
-    conv.expert.name = prof.name || conv.expert.name;
-    conv.expert.profilePic =
-      prof.profileImageUrl || conv.expert.profilePic;
-  }
-}
+      if (prof) {
+        conv.expert.name = prof.name || conv.expert.name;
+        conv.expert.profilePic = prof.profileImageUrl || conv.expert.profilePic;
+      }
+    }
 
-return res.json({ conversation: conv });
-
+    return res.json({ conversation: conv });
   } catch (e) {
     console.error("❌ getOrCreateConversation error:", e);
     return res.status(500).json({ message: "Server error", error: e.message });
   }
 };
 
-
 /**
  * GET /api/messages/conversations/:conversationId/messages?limit=50
- * - يرجّع رسائل المحادثة (بشكل افتراضي آخر 50 رسالة)
- * - يضمن إن اليوزر جزء من المحادثة
+ * - يرجّع رسائل المحادثة
+ * - ويعمل read/unread reset (بدون إرسال إشعارات)
  */
 export const listMessagesForConversation = async (req, res) => {
   try {
     const userId = req.user.id;
     const { conversationId } = req.params;
-    const limit = Math.min(
-      Number(req.query.limit || 50),
-      200
-    ); // حماية بسيطة
+    const limit = Math.min(Number(req.query.limit || 50), 200);
 
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
@@ -210,54 +174,33 @@ export const listMessagesForConversation = async (req, res) => {
       .populate("to", "name email profilePic role")
       .lean();
 
-    // تحديث الـ unread counter و readAt للرسائل اللي وصلت للمستخدم الحالي
     const now = new Date();
     await Message.updateMany(
-      {
-        conversation: conversationId,
-        to: userId,
-        readAt: null,
-      },
+      { conversation: conversationId, to: userId, readAt: null },
       { $set: { readAt: now } }
     );
 
-    if (isCustomer) {
-      conversation.unreadForCustomer = 0;
-    } else if (isExpert) {
-      conversation.unreadForExpert = 0;
-    }
+    if (isCustomer) conversation.unreadForCustomer = 0;
+    else if (isExpert) conversation.unreadForExpert = 0;
+
     await conversation.save();
 
     return res.json({ conversation, messages });
   } catch (e) {
     console.error("❌ listMessagesForConversation error:", e);
-    const status = e.status || 500;
-    return res.status(status).json({ message: e.message });
+    return res.status(e.status || 500).json({ message: e.message });
   }
 };
 
 /**
  * POST /api/messages/conversations/:conversationId/messages
- * Body:
- *  {
- *    text?: string,
- *    attachmentUrl?: string,
- *    attachmentName?: string,
- *    attachmentType?: string,
- *    bookingId?: string (اختياري)
- *  }
+ * - إرسال رسالة + إرسال إشعار للمستقبل
  */
 export const sendMessageInConversation = async (req, res) => {
   try {
     const userId = req.user.id;
     const { conversationId } = req.params;
-    const {
-      text,
-      attachmentUrl,
-      attachmentName,
-      attachmentType,
-      bookingId,
-    } = req.body || {};
+    const { text, attachmentUrl, attachmentName, attachmentType, bookingId } = req.body || {};
 
     if (!text && !attachmentUrl) {
       return res.status(400).json({
@@ -272,22 +215,17 @@ export const sendMessageInConversation = async (req, res) => {
 
     const { isCustomer, isExpert } = ensureParticipant(conversation, userId);
 
-    // حدّد المستقبل
     const to =
       conversation.customer?.toString() === userId
         ? conversation.expert
         : conversation.customer;
 
-    // لو فيه bookingId → تأكد إنه موجود (اختياري)
     let bookingRef = undefined;
     if (bookingId) {
       const booking = await Booking.findById(bookingId);
-      if (booking) {
-        bookingRef = booking._id;
-      }
+      if (booking) bookingRef = booking._id;
     }
 
-    // إنشاء الرسالة
     const message = await Message.create({
       conversation: conversation._id,
       from: userId,
@@ -299,7 +237,6 @@ export const sendMessageInConversation = async (req, res) => {
       booking: bookingRef,
     });
 
-    // تحديث ملخّص المحادثة
     const preview =
       text?.toString().slice(0, 80) ||
       attachmentName ||
@@ -309,15 +246,30 @@ export const sendMessageInConversation = async (req, res) => {
     conversation.lastMessageAt = message.createdAt;
     conversation.lastMessageSender = userId;
 
-    if (isCustomer) {
-      conversation.unreadForExpert =
-        (conversation.unreadForExpert || 0) + 1;
-    } else if (isExpert) {
-      conversation.unreadForCustomer =
-        (conversation.unreadForCustomer || 0) + 1;
-    }
+    if (isCustomer) conversation.unreadForExpert = (conversation.unreadForExpert || 0) + 1;
+    else if (isExpert) conversation.unreadForCustomer = (conversation.unreadForCustomer || 0) + 1;
 
     await conversation.save();
+
+    // ✅ إشعار للمستقبل: رسالة جديدة (مكانه الصح)
+    try {
+      const sender = await User.findById(userId).select("name").lean();
+      const senderName = sender?.name || "Someone";
+
+      await notifyUser(to, {
+        title: "💬 New Message",
+        body: `${senderName}: ${preview}`,
+        data: {
+          type: "NEW_MESSAGE",
+          conversationId: String(conversation._id),
+          messageId: String(message._id),
+          fromUserId: String(userId),
+        },
+        link: `/messages/${conversation._id}`,
+      });
+    } catch (e) {
+      console.error("❌ notify message failed:", e.message);
+    }
 
     const fullMessage = await Message.findById(message._id)
       .populate("from", "name email profilePic role")
@@ -330,7 +282,6 @@ export const sendMessageInConversation = async (req, res) => {
     });
   } catch (e) {
     console.error("❌ sendMessageInConversation error:", e);
-    const status = e.status || 500;
-    return res.status(status).json({ message: e.message });
+    return res.status(e.status || 500).json({ message: e.message });
   }
 };

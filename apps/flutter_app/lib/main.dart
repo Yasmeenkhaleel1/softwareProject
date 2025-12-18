@@ -96,13 +96,35 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
   String? _role;
   bool _isApproved = true;
   bool _hasProfile = true;
-bool _pushInitialized = false;
+  bool _pushInitialized = false;
+  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
+    PushNotifications.configure(onLink: (link) => _handlePushLink(link));
     _checkLoginStatus();
   }
+
+Future<void> _handlePushLink(String link) async {
+  // مثال: /expert/bookings/<id>
+  // انتِ عدّليها حسب صفحاتك الفعلية
+  if (link.startsWith("/expert/bookings/")) {
+    final id = link.split("/").last;
+    // TODO: افتحي صفحة تفاصيل الحجز عندك
+    // _navKey.currentState?.push(MaterialPageRoute(builder: (_) => BookingDetailsPage(id: id)));
+    return;
+  }
+
+  if (link == "/" || link.isEmpty) {
+    _navKey.currentState?.pushNamed('/landing_page');
+    return;
+  }
+
+  // fallback
+  _navKey.currentState?.pushNamed('/landing_page');
+}
+
 
 Future<void> _ensurePushInitialized() async {
   if (_pushInitialized) return;
@@ -246,6 +268,7 @@ Future<void> _ensurePushInitialized() async {
     }
 
     return MaterialApp(
+      navigatorKey: _navKey,
       debugShowCheckedModeBanner: false,
       title: 'Lost Treasures',
       theme: ThemeData(
