@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../config/api_config.dart';            // ✅ مهم
 import 'customer_dashboard_page.dart';
+import 'change_password_page.dart';
 
 class CustomerProfilePage extends StatefulWidget {
   const CustomerProfilePage({super.key});
@@ -528,23 +529,46 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
   // ============================
   // 🔹 تبويب الإعدادات
   // ============================
-  Widget _buildSettingsTab(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        ListTile(
-          leading: const Icon(Icons.image_rounded,
-              color: Colors.blueAccent),
-          title: const Text("Change Profile Picture"),
-          subtitle:
-              const Text("Upload a new profile photo from your device"),
-          onTap: uploadProfileImage,
-        ),
-        const Divider(),
-        // مساحة لإضافة إعدادات أخرى لاحقاً (Notifications, Language, etc.)
-      ],
-    );
-  }
+Widget _buildSettingsTab(BuildContext context) {
+  return ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      ListTile(
+        leading: const Icon(Icons.image_rounded, color: Colors.blueAccent),
+        title: const Text("Change Profile Picture"),
+        subtitle: const Text("Upload a new profile photo from your device"),
+        onTap: uploadProfileImage,
+      ),
+
+      const Divider(),
+
+      // ✅ زر Change Password
+      ListTile(
+        leading: const Icon(Icons.lock_rounded, color: accentColor),
+        title: const Text("Change Password"),
+        subtitle: const Text("Update your account password securely"),
+        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+        onTap: () async {
+          final changed = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+          );
+
+          // اختياري: لو رجعت true من صفحة تغيير الباسورد
+          if (changed == true && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("✅ Password updated successfully")),
+            );
+          }
+        },
+      ),
+
+      const Divider(),
+
+      // مساحة لإعدادات أخرى لاحقاً
+    ],
+  );
+}
 
   // ============================
   // 🔹 عنصر حقل إدخال موحّد

@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart'; // ⭐ مهم لفتح Zoom
+import 'package:url_launcher/url_launcher.dart';
 
-import '../config/api_config.dart'; // ✅ فقط لتصحيح baseUrl على الويب/الموبايل
+import '../config/api_config.dart';
 
 class BookingDetailPage extends StatefulWidget {
   final String bookingId;
@@ -345,7 +345,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
         title: Text(
           booking?['code']?.toString() ?? 'Booking',
           maxLines: 1,
-          overflow: TextOverflow.ellipsis, // ✅ منع overflow بالـ title
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontWeight: FontWeight.w900,
             fontSize: _isWebWide ? 18 : 16,
@@ -499,7 +499,8 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
                             ),
                             const SizedBox(height: 12),
                             _ResponsiveInfoGrid(
-                              minTileWidth: wide ? 420 : 320,
+                              // ✅ UI ONLY: أصغر عشان ما يكون في عمود واحد ضخم على الويب
+                              minTileWidth: wide ? 360 : 300,
                               isMobile: _isMobile,
                               children: [
                                 _InfoTile(
@@ -561,13 +562,11 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
                               final provider = (m['provider'] ?? 'ZOOM').toString();
                               final meetingId = (m['meetingId'] ?? '').toString();
                               final shortUrl = (m['joinUrl'] ?? m['startUrl'] ?? '').toString();
-                              final displayUrl =
-                                  shortUrl.length > 46 ? '${shortUrl.substring(0, 46)}…' : shortUrl;
+                              final displayUrl = shortUrl.length > 46 ? '${shortUrl.substring(0, 46)}…' : shortUrl;
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // ✅ منع overflow: على الموبايل نخلي الزر تحت العنوان بدل Row ضيّق
                                   if (_isMobile)
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,7 +613,6 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
                                         ),
                                       ],
                                     ),
-
                                   const SizedBox(height: 12),
                                   _KVRow(k: "Provider", v: provider, veryNarrow: _isVeryNarrow),
                                   if (meetingId.isNotEmpty) ...[
@@ -626,7 +624,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
                                     Text(
                                       displayUrl,
                                       maxLines: 2,
-                                      overflow: TextOverflow.ellipsis, // ✅ منع overflow للرابط
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(fontSize: 12.5, color: _muted),
                                     ),
                                   ],
@@ -776,7 +774,6 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
       ]);
     }
 
-    // Responsive arrangement
     if (_isMobile) {
       return Column(
         children: items
@@ -833,7 +830,6 @@ class _Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ منع overflow داخل الـ pill (خصوصاً على الشاشات الضيقة)
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 520),
       child: Container(
@@ -919,11 +915,15 @@ class _InfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    final isMobile = w < 760;
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      // ✅ UI ONLY: padding أصغر لتصير compact SaaS
+      padding: EdgeInsets.all(isMobile ? 10 : 12),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFF),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE6EEF8)),
       ),
       child: Column(
@@ -932,13 +932,14 @@ class _InfoTile extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                // ✅ UI ONLY: أيقونة أصغر
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   color: const Color(0xFF62C6D9).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: const Color(0xFF2F8CA5), size: 18),
+                child: Icon(icon, color: const Color(0xFF2F8CA5), size: 16),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -946,13 +947,17 @@ class _InfoTile extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: isMobile ? 12.5 : 13.5,
+                    color: const Color(0xFF0F172A),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          child,
+          const SizedBox(height: 8),
+          child, // ✅ لا نغير على child أو styles تبعك (منطق/ستايل تبع الصفحة)
         ],
       ),
     );
@@ -976,22 +981,22 @@ class _ResponsiveInfoGrid extends StatelessWidget {
       builder: (context, c) {
         final count = (c.maxWidth / minTileWidth).floor().clamp(1, 3);
 
-        // ✅ على الموبايل نزيد ارتفاع البلاطات (نقلل childAspectRatio) حتى ما يطلع overflow
+        // ✅ UI ONLY: childAspectRatio أكبر => البلاطات أقصر (Compact SaaS)
         final double ratio;
         if (count == 1) {
-          ratio = isMobile ? 1.85 : 2.2;
+          ratio = isMobile ? 3.0 : 3.6;
         } else if (count == 2) {
-          ratio = isMobile ? 2.0 : 2.25;
+          ratio = isMobile ? 2.7 : 3.2;
         } else {
-          ratio = 2.25;
+          ratio = isMobile ? 2.8 : 3.3;
         }
 
         return GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: count,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
           childAspectRatio: ratio,
           children: children,
         );

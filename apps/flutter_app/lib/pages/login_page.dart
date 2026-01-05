@@ -324,17 +324,7 @@ class _LoginPageState extends State<LoginPage> {
                           fontWeight: FontWeight.w600),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.pushNamed(
-                        context, '/change_password_page'),
-                    child: const Text(
-                      "Change Password",
-                      style: TextStyle(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
+                  
                 ],
               ),
             ),

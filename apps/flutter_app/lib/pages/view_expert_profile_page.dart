@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart'; // ✅ أضيفي هذا
+import 'change_password_page.dart'; // ✅ إضافة صفحة تغيير كلمة المرور
 
 import '../config/api_config.dart'; // ✅ أضيفي هذا
 
@@ -45,7 +46,7 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
           // ✅ أصلحي روابط الصور عند التحميل
           _approved = data['approvedProfile'];
           _pending = data['pendingProfile'];
-          
+
           // إصلاح روابط الصور إذا كانت موجودة
           if (_approved != null) {
             _approved = _fixProfileImageUrls(_approved!);
@@ -53,7 +54,7 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
           if (_pending != null) {
             _pending = _fixProfileImageUrls(_pending!);
           }
-          
+
           _loading = false;
         });
       } else {
@@ -68,27 +69,27 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
   // ✅ دالة لإصلاح روابط الصور في البروفايل
   Map<String, dynamic> _fixProfileImageUrls(Map<String, dynamic> profile) {
     final fixedProfile = Map<String, dynamic>.from(profile);
-    
+
     // إصلاح صورة البروفايل
     if (profile['profileImageUrl'] != null) {
-      fixedProfile['profileImageUrl'] = 
+      fixedProfile['profileImageUrl'] =
           ApiConfig.fixAssetUrl(profile['profileImageUrl']);
     }
-    
+
     // إصلاح الشهادات
     if (profile['certificates'] != null && profile['certificates'] is List) {
       fixedProfile['certificates'] = (profile['certificates'] as List)
           .map((url) => ApiConfig.fixAssetUrl(url))
           .toList();
     }
-    
+
     // إصلاح المعرض
     if (profile['gallery'] != null && profile['gallery'] is List) {
       fixedProfile['gallery'] = (profile['gallery'] as List)
           .map((url) => ApiConfig.fixAssetUrl(url))
           .toList();
     }
-    
+
     return fixedProfile;
   }
 
@@ -157,10 +158,8 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
                               constraints:
                                   const BoxConstraints(maxWidth: 1100),
                               child: isMobile
-                                  ? _buildMobileLayout(
-                                      activeProfile, status)
-                                  : _buildDesktopLayout(
-                                      activeProfile, status),
+                                  ? _buildMobileLayout(activeProfile, status)
+                                  : _buildDesktopLayout(activeProfile, status),
                             ),
                           ),
                   ),
@@ -243,19 +242,20 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
       onTap: () => setState(() => _showApproved = isApprovedButton),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(vertical: 12, horizontal: 22),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 22),
         decoration: BoxDecoration(
           color: isActive ? const Color(0xFF62C6D9) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: const Color(0xFF62C6D9)),
-          boxShadow: isActive ? [
-            BoxShadow(
-              color: const Color(0xFF62C6D9).withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            )
-          ] : null,
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF62C6D9).withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : null,
         ),
         child: Text(
           title,
@@ -273,21 +273,20 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
   Widget _buildLeftProfile(Map<String, dynamic> p, String status) {
     final Color badgeColor =
         status == "Approved" ? Colors.green : Colors.orange;
-    
+
     // ✅ تحضير رابط صورة البروفايل
     final String? profileImageUrl = p['profileImageUrl'];
-    final String? fixedProfileImageUrl = profileImageUrl != null && profileImageUrl.isNotEmpty
-        ? ApiConfig.fixAssetUrl(profileImageUrl)
-        : null;
+    final String? fixedProfileImageUrl =
+        profileImageUrl != null && profileImageUrl.isNotEmpty
+            ? ApiConfig.fixAssetUrl(profileImageUrl)
+            : null;
 
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 14)
-        ],
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 14)],
       ),
       child: Column(
         children: [
@@ -303,7 +302,8 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
               ),
             ),
             child: ClipOval(
-              child: fixedProfileImageUrl != null && fixedProfileImageUrl.isNotEmpty
+              child: fixedProfileImageUrl != null &&
+                      fixedProfileImageUrl.isNotEmpty
                   ? CachedNetworkImage(
                       imageUrl: fixedProfileImageUrl,
                       fit: BoxFit.cover,
@@ -335,14 +335,13 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
           const SizedBox(height: 15),
           Text(
             p['name'] ?? "Unnamed",
-            style: const TextStyle(
-                fontSize: 20, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
           Text(
             p['specialization'] ?? "",
             style: TextStyle(
-              color: Colors.teal[700], 
+              color: Colors.teal[700],
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -350,12 +349,10 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
           const Divider(height: 25),
           _infoIcon(Icons.location_on, p['location'] ?? "Unknown"),
           const SizedBox(height: 8),
-          _infoIcon(
-              Icons.work, "${p['experience'] ?? '--'} years exp."),
+          _infoIcon(Icons.work, "${p['experience'] ?? '--'} years exp."),
           const SizedBox(height: 20),
           Container(
-            padding:
-                const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
             decoration: BoxDecoration(
               color: badgeColor.withOpacity(.16),
               borderRadius: BorderRadius.circular(8),
@@ -370,30 +367,65 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
               ),
             ),
           ),
+
+          // ✅ زر تغيير كلمة المرور داخل هذه الصفحة
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final changed = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ChangePasswordPage(),
+                  ),
+                );
+
+                if (changed == true && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("✅ Password updated successfully"),
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF62C6D9),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.key_rounded, size: 18),
+              label: const Text(
+                "Change Password",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
   // ================= DETAIL CARD =================
-  Widget _buildDetailedCard(
-      {required String title, required Widget child}) {
+  Widget _buildDetailedCard({required String title, required Widget child}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 12)
-        ],
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 12)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold)),
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const Divider(height: 16),
           child,
         ],
@@ -451,7 +483,7 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
   Widget _buildCertificateItem(String url) {
     // ✅ إصلاح رابط الشهادة
     final fixedUrl = ApiConfig.fixAssetUrl(url);
-    
+
     return GestureDetector(
       onTap: () async {
         if (await canLaunchUrl(Uri.parse(fixedUrl))) {
@@ -532,7 +564,7 @@ class _ViewExpertProfilePageState extends State<ViewExpertProfilePage> {
   Widget _buildGalleryItem(String url) {
     // ✅ إصلاح رابط المعرض
     final fixedUrl = ApiConfig.fixAssetUrl(url);
-    
+
     return Container(
       width: 110,
       height: 110,

@@ -118,7 +118,7 @@ class _MyBookingTabState extends State<MyBookingTab> {
             title: Text(
               "My Bookings",
               style: TextStyle(
-                color: titleColor,
+                color: Colors.white,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.2,
               ),
