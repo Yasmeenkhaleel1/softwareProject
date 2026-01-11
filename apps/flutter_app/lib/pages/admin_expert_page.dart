@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/api_config.dart'; // ✅ جديد: عشان Web/Mobile + fixAssetUrl
+
 class AdminExpertPage extends StatefulWidget {
   final String expertId;
   const AdminExpertPage({super.key, required this.expertId});
@@ -14,7 +16,9 @@ class AdminExpertPage extends StatefulWidget {
 }
 
 class _AdminExpertPageState extends State<AdminExpertPage> {
-  static const baseUrl = "http://localhost:5000";
+  // ✅ بدل static const baseUrl
+  String get baseUrl => ApiConfig.baseUrl;
+
   bool loading = true;
   Map<String, dynamic>? expert;
 
@@ -88,7 +92,10 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
           maxLines: 3,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
@@ -120,22 +127,152 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
     }
   }
 
-  Widget _buildLink(String url, String label) {
-    return InkWell(
-      onTap: () async {
-        final uri = Uri.parse(url);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
-      },
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xFF347C8B),
-          fontWeight: FontWeight.w600,
-          decoration: TextDecoration.underline,
-        ),
+  // ✅ فتح رابط بشكل يشتغل على Web + Mobile
+  Future<void> _openUrl(String url) async {
+    final fixed = ApiConfig.fixAssetUrl(url);
+    if (fixed.isEmpty) return;
+
+    final uri = Uri.parse(fixed);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(
+        uri,
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_blank', // ✅ مهم للويب
+      );
+    }
+  }
+
+  // ✅ عنصر شهادة مع زر View بدل الضغط على النص
+  Widget _buildCertItem(String url) {
+    final fixedUrl = ApiConfig.fixAssetUrl(url);
+    final fileName = fixedUrl.isNotEmpty ? fixedUrl.split('/').last : "File";
+
+    final isPdf = fileName.toLowerCase().endsWith('.pdf');
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE3EBF3)),
       ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFF62C6D9).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
+              color: const Color(0xFF244C63),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              fileName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF244C63),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            onPressed: fixedUrl.isEmpty ? null : () => _openUrl(fixedUrl),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF347C8B),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.visibility_rounded, size: 18),
+            label: const Text(
+              "View",
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ عنصر صورة Gallery مع زر View
+  Widget _buildGalleryItem(String img) {
+    final fixed = ApiConfig.fixAssetUrl(img);
+
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            fixed,
+            width: 110,
+            height: 110,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              width: 110,
+              height: 110,
+              color: Colors.grey[200],
+              alignment: Alignment.center,
+              child: const Icon(Icons.broken_image, color: Colors.grey),
+            ),
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return Container(
+                width: 110,
+                height: 110,
+                color: Colors.grey[200],
+                alignment: Alignment.center,
+                child: const CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF62C6D9),
+                ),
+              );
+            },
+          ),
+        ),
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: InkWell(
+            onTap: fixed.isEmpty ? null : () => _openUrl(fixed),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.55),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.visibility_rounded, size: 16, color: Colors.white),
+                  SizedBox(width: 6),
+                  Text(
+                    "View",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -145,7 +282,9 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
   Widget build(BuildContext context) {
     if (loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF62C6D9))),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF62C6D9)),
+        ),
       );
     }
 
@@ -157,10 +296,20 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
     final profile = expert!['profile'] ?? {};
 
     final displayName = user['name'] ?? profile['name'] ?? "Unknown Expert";
-    final imageUrl = profile['profileImageUrl'] ?? "";
 
-    final certificates = List<String>.from(profile['certificates'] ?? []);
-    final gallery = List<String>.from(profile['gallery'] ?? []);
+    // ✅ إصلاح رابط الصورة
+    final imageUrl = ApiConfig.fixAssetUrl(profile['profileImageUrl']?.toString());
+
+    // ✅ إصلاح روابط الشهادات + المعرض
+    final certificates = List<String>.from(profile['certificates'] ?? [])
+        .map((u) => ApiConfig.fixAssetUrl(u.toString()))
+        .where((u) => u.isNotEmpty)
+        .toList();
+
+    final gallery = List<String>.from(profile['gallery'] ?? [])
+        .map((u) => ApiConfig.fixAssetUrl(u.toString()))
+        .where((u) => u.isNotEmpty)
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F6F8),
@@ -178,7 +327,7 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
         padding: const EdgeInsets.all(26),
         child: Column(
           children: [
-            _headerCard(displayName, user['email'], imageUrl),
+            _headerCard(displayName, (user['email'] ?? '').toString(), imageUrl),
 
             const SizedBox(height: 22),
 
@@ -186,7 +335,7 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
               "Personal Information",
               [
                 _infoRow("Gender", user['gender']),
-                _infoRow("Age", user['age'].toString()),
+                _infoRow("Age", (user['age'] ?? "—").toString()),
                 _infoRow("Email Verified", user['isVerified'] == true ? "Yes" : "No"),
                 _infoRow("Admin Approved", user['isApproved'] == true ? "Yes" : "No"),
               ],
@@ -208,13 +357,13 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
               const SizedBox(height: 18),
               _infoCard(
                 "Certificates",
-                certificates.map((url) => _buildLink(url, url)).toList(),
+                certificates.map(_buildCertItem).toList(), // ✅ زر View
               ),
             ],
 
             if (gallery.isNotEmpty) ...[
               const SizedBox(height: 18),
-              _galleryCard(gallery),
+              _galleryCard(gallery), // ✅ صور + View
             ],
 
             const SizedBox(height: 26),
@@ -259,15 +408,19 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(height: 6),
-                Text(email,
-                    style: const TextStyle(
-                        fontSize: 15, color: Colors.white70)),
+                Text(
+                  email,
+                  style: const TextStyle(fontSize: 15, color: Colors.white70),
+                ),
               ],
             ),
           ),
@@ -295,11 +448,14 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF244C63))),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF244C63),
+            ),
+          ),
           const SizedBox(height: 12),
           const Divider(),
           const SizedBox(height: 12),
@@ -316,10 +472,13 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
         children: [
           Expanded(
             flex: 3,
-            child: Text(label,
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF244C63))),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF244C63),
+              ),
+            ),
           ),
           Expanded(
             flex: 5,
@@ -342,19 +501,7 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
         Wrap(
           spacing: 12,
           runSpacing: 12,
-          children: gallery
-              .map(
-                (img) => ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    img,
-                    width: 110,
-                    height: 110,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              )
-              .toList(),
+          children: gallery.map(_buildGalleryItem).toList(), // ✅ زر View
         )
       ],
     );
@@ -376,8 +523,10 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
           ),
           onPressed: _approveExpert,
           icon: const Icon(Icons.check_circle, color: Colors.white),
-          label: const Text("Approve",
-              style: TextStyle(color: Colors.white, fontSize: 16)),
+          label: const Text(
+            "Approve",
+            style: TextStyle(color: Colors.white, fontSize: 16),
+          ),
         ),
         const SizedBox(width: 20),
         ElevatedButton.icon(
@@ -390,8 +539,10 @@ class _AdminExpertPageState extends State<AdminExpertPage> {
           ),
           onPressed: _rejectExpert,
           icon: const Icon(Icons.cancel, color: Colors.white),
-          label: const Text("Reject",
-              style: TextStyle(color: Colors.white, fontSize: 16)),
+          label: const Text(
+            "Reject",
+            style: TextStyle(color: Colors.white, fontSize: 16),
+          ),
         ),
       ],
     );

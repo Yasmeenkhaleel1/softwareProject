@@ -52,7 +52,7 @@ export const listBookings = async (req, res) => {
   if (to) match.startAt.$lte = new Date(to);
 
   const query = Booking.find(match)
-    .populate("customer", "name email")
+    .populate("customer", "name email profilePic ")
     .populate("service", "title durationMinutes")
     .sort({ startAt: 1 })
     .skip((+page - 1) * +limit)

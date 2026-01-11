@@ -464,7 +464,7 @@ router.get(
   async (req, res) => {
     try {
       const pendingProfiles = await ExpertProfile.find({ status: "pending" })
-        .populate("userId", "name email gender role isVerified isApproved")
+        .populate("userId", "name email profileImageUrl gender role isVerified isApproved")
         .select(
           "userId name specialization profileImageUrl createdAt updatedAt"
         );

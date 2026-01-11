@@ -189,7 +189,7 @@ class _MyAvailabilityPageState extends State<MyAvailabilityPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("My Availability"),
-        backgroundColor: const Color(0xFF0EA5E9),
+        backgroundColor: const Color(0xFF62C6D9),
         foregroundColor: Colors.white,
       ),
       backgroundColor: const Color(0xFFF3F4F6),
@@ -326,7 +326,7 @@ return Container(
               children: [
                 Switch(
                   value: active,
-                  activeColor: const Color(0xFF0EA5E9),
+                  activeColor: const Color(0xFF62C6D9),
                   onChanged: (v) => setState(() => d['active'] = v),
                 ),
                 Text(
@@ -372,7 +372,7 @@ return Container(
               children: [
                 Switch(
                   value: active,
-                  activeColor: const Color(0xFF0EA5E9),
+                  activeColor: const Color(0xFF62C6D9),
                   onChanged: (v) => setState(() => d['active'] = v),
                 ),
                 Text(
@@ -491,7 +491,7 @@ return Container(
           ),
           calendarStyle: CalendarStyle(
             todayDecoration: BoxDecoration(
-              color: const Color(0xFF0EA5E9).withOpacity(0.25),
+              color: const Color(0xFF62C6D9).withOpacity(0.25),
               shape: BoxShape.circle,
             ),
           ),
@@ -631,7 +631,7 @@ return Container(
           icon: const Icon(Icons.add),
           label: const Text("Add Special Date"),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0EA5E9),
+            backgroundColor: const Color(0xFF62C6D9),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
@@ -704,7 +704,8 @@ return Container(
                           : "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}",
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0EA5E9),
+                      backgroundColor: const Color(0xFF62C6D9),
+                      foregroundColor: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -737,7 +738,7 @@ return Container(
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0EA5E9),
+                            backgroundColor: const Color(0xFF62C6D9),
                             foregroundColor: Colors.white,
                           ),
                         ),
@@ -766,9 +767,14 @@ return Container(
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0EA5E9),
+                  backgroundColor: const Color(0xFF62C6D9),
+                
                 ),
-                child: const Text("Save"),
+                child: const Text(
+                                   "Save",
+                                    style: TextStyle(color: Colors.white),
+                                 ),
+
               ),
             ],
           );
@@ -809,9 +815,14 @@ return Container(
               onPressed: () =>
                   Navigator.pop(context, {"start": start, "end": end}),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9),
+                backgroundColor: const Color(0xFF62C6D9),
+               
               ),
-              child: const Text("Add"),
+              child: const Text(
+                                 "Add",
+                           style: TextStyle(color: Colors.white),
+                                ),
+
             ),
           ],
         );
@@ -861,7 +872,7 @@ return Container(
           : const Icon(Icons.save),
       label: Text(saving ? "Saving..." : "Save Changes"),
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF0EA5E9),
+        backgroundColor: const Color(0xFF62C6D9),
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
         shape: RoundedRectangleBorder(

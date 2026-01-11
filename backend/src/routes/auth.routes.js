@@ -7,6 +7,7 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 import User, { roles } from "../models/user/user.model.js";
+import { auth } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -160,5 +161,54 @@ router.post("/login", async (req, res) => {
     },
   });
 });
+
+// === PATCH /auth/change-password ===
+router.patch(
+  "/change-password",
+  auth(), // أي مستخدم مسجل دخول (Customer/Expert/Admin)
+  [
+    body("currentPassword").isString().notEmpty(),
+    body("newPassword")
+      .isString()
+      .isLength({ min: 8 })
+      .withMessage("New password must be at least 8 characters"),
+    body("confirmPassword")
+      .optional()
+      .custom((value, { req }) => {
+        if (value !== req.body.newPassword) {
+          throw new Error("Passwords do not match");
+        }
+        return true;
+      }),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    try {
+      const { currentPassword, newPassword } = req.body;
+
+      // 1) Get user
+      const user = await User.findById(req.user.id);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      // 2) Verify current password
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!ok) return res.status(400).json({ message: "Current password is incorrect" });
+
+      // 3) Prevent same password
+      const same = await bcrypt.compare(newPassword, user.passwordHash);
+      if (same) return res.status(400).json({ message: "New password must be different" });
+
+      // 4) Save new hash
+      user.passwordHash = await bcrypt.hash(newPassword, 10);
+      await user.save();
+
+      return res.json({ message: "Password changed successfully" });
+    } catch (e) {
+      return res.status(500).json({ message: "Server error", error: e.message });
+    }
+  }
+);
 
 export default router;

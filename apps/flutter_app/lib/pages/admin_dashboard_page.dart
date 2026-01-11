@@ -14,6 +14,7 @@ import 'admin_expert_page.dart';
 import 'admin_payments_page.dart';
 import 'admin_disputes_page.dart';
 import 'admin_earnings_page.dart';
+import '../config/api_config.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -841,44 +842,71 @@ PreferredSizeWidget _buildMobileAppBar() {
       padding: const EdgeInsets.all(16),
       itemCount: pendingExperts.length,
       itemBuilder: (context, index) {
+      
         final expert = pendingExperts[index];
         final user = expert['userId'] ?? {};
         final displayName = user['name'] ?? expert['name'] ?? "Unknown Expert";
         final email = user['email'] ?? "";
-        final baseUrl = getBaseUrl();
-        final profileImageUrl = expert['profileImageUrl'] ??
-            "$baseUrl/uploads/default_profile.png";
+       final raw = (expert['profileImageUrl']
+        ?? (expert['profile']?['profileImageUrl'])
+        ?? (expert['expertProfile']?['profileImageUrl'])
+        ?? '').toString();
+final profileImageUrl = ApiConfig.fixAssetUrl(
+  raw.isNotEmpty ? raw : "/uploads/profile_pictures.png",
+);
+
 
         return Card(
           elevation: 3,
           margin: const EdgeInsets.symmetric(vertical: 10),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           child: ListTile(
-            leading: CircleAvatar(
-              radius: 25,
-              backgroundImage: profileImageUrl.startsWith("http")
-                  ? NetworkImage(profileImageUrl)
-                  : const AssetImage('assets/images/profile_placeholder.png')
-                      as ImageProvider,
-            ),
-            title: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AdminExpertPage(expertId: expert['_id']),
-                  ),
-                );
-              },
-              child: Text(
-                displayName,
-                style: const TextStyle(
-                  color: Colors.blueAccent,
-                  fontWeight: FontWeight.bold,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
+           leading: CircleAvatar(
+  radius: 25,
+  backgroundColor: const Color(0xFF62C6D9).withOpacity(0.15),
+  backgroundImage: profileImageUrl.isNotEmpty
+      ? NetworkImage(profileImageUrl)
+      : const AssetImage('assets/images/profile_placeholder.png') as ImageProvider,
+),
+
+            title: Row(
+  children: [
+    Expanded(
+      child: Text(
+        displayName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ),
+    const SizedBox(width: 10),
+    ElevatedButton(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AdminExpertPage(expertId: expert['_id']),
+          ),
+        );
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF347C8B),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      child: const Text(
+        "View",
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
+    ),
+  ],
+),
+
             subtitle: Text(email),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
