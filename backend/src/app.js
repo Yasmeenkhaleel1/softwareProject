@@ -27,7 +27,7 @@ import calendarRouter from "./routes/calendar.route.js";
 import paymentRoutes from "./routes/payments.routes.js";            // 💳 الدفع العام
 import expertEarningsRoutes from "./routes/expertEarnings.route.js";
 
-
+import recommendationRoutes from "./routes/recommendation.route.js";
 
 import pushRoutes from "./routes/push.routes.js";
 
@@ -125,6 +125,7 @@ app.use("/api/assistant", aiRoutes);
 // 🔹 الإدارة (Admin)
 app.use("/api/admin", adminRoutes);
 
+app.use("/api/recommendations", recommendationRoutes);
 
 // 🔹 حجوزات الخبير (Expert Dashboard) ← آخر شيء دائمًا
 app.use("/api", expertBookingRoute);

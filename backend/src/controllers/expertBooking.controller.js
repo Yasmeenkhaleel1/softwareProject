@@ -73,7 +73,7 @@ export const listBookings = async (req, res) => {
 export const getBooking = async (req, res) => {
   const userId = req.user.id;
   const booking = await Booking.findById(req.params.id)
-    .populate("customer", "name email")
+    .populate("customer", "name email profilePic ")
     .populate("service")
     .lean();
 

@@ -22,7 +22,7 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
   // ✅ نخليها Map<String,dynamic>
   List<Map<String, dynamic>> _disputes = [];
 
-  // ALL, OPEN, UNDER_REVIEW, RESOLVED_CUSTOMER, RESOLVED_EXPERT
+  // ALL, OPEN, UNDER_REVIEW, RESOLVED_CUSTOMER
   String _statusFilter = 'OPEN';
 
   @override
@@ -94,8 +94,7 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
         return const Color(0xFFF2C94C);
       case 'RESOLVED_CUSTOMER':
         return const Color(0xFF27AE60);
-      case 'RESOLVED_EXPERT':
-        return const Color(0xFF2D9CDB);
+    
       default:
         return Colors.grey;
     }
@@ -109,8 +108,7 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
         return 'Under review';
       case 'RESOLVED_CUSTOMER':
         return 'Resolved (customer)';
-      case 'RESOLVED_EXPERT':
-        return 'Resolved (expert)';
+      
       case 'ALL':
         return 'All disputes';
       default:
@@ -290,7 +288,7 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
     final all = _countStatus('ALL');
     final open = _countStatus('OPEN');
     final review = _countStatus('UNDER_REVIEW');
-    final resolved = _countStatus('RESOLVED_CUSTOMER') + _countStatus('RESOLVED_EXPERT');
+    final resolved = _countStatus('RESOLVED_CUSTOMER');
 
     final cards = [
       _StatCard(
@@ -443,7 +441,7 @@ class _FiltersCard extends StatelessWidget {
       'OPEN',
       'UNDER_REVIEW',
       'RESOLVED_CUSTOMER',
-      'RESOLVED_EXPERT',
+      
     ];
 
     return _SurfaceCard(
