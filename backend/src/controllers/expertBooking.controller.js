@@ -52,7 +52,7 @@ export const listBookings = async (req, res) => {
   if (to) match.startAt.$lte = new Date(to);
 
   const query = Booking.find(match)
-    .populate("customer", "name email")
+    .populate("customer", "name email profilePic ")
     .populate("service", "title durationMinutes")
     .sort({ startAt: 1 })
     .skip((+page - 1) * +limit)
@@ -73,7 +73,7 @@ export const listBookings = async (req, res) => {
 export const getBooking = async (req, res) => {
   const userId = req.user.id;
   const booking = await Booking.findById(req.params.id)
-    .populate("customer", "name email")
+    .populate("customer", "name email profilePic ")
     .populate("service")
     .lean();
 

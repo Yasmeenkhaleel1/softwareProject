@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import '../../api/api_service.dart';
 
 class AiAssistantPanel extends StatefulWidget {
@@ -23,14 +24,25 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
 
   bool _sending = false;
 
-  final List<_AiMessage> _messages = [
-    _AiMessage(
-      fromBot: true,
-      text:
-          "Hi 👋 I'm your smart assistant.\nI can help you with bookings, payments, and how LostTreasures works.",
-      createdAt: DateTime.now(),
-    ),
-  ];
+  /// جلسة المحادثة من السيرفر
+  String? _sessionId;
+
+  // Initializing with the welcome message
+  final List<_AiMessage> _messages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    
+    _messages.add(
+      _AiMessage(
+        fromBot: true,
+        text:
+            "Hi 👋 I'm your smart assistant.\nI can help you with bookings, payments, and how LostTreasures works.",
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
 
   static const Color _brand = Color(0xFF62C6D9);
   static const Color _brandDark = Color(0xFF285E6E);
@@ -55,37 +67,65 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
     _scrollToBottom();
 
     try {
-      final answer = await ApiService.askAssistant(
-        question: text,
-        // ممكن بعدين تبعتي context: userId, آخر حجز.. الخ
-        // extraContext: {"userId": widget.userId, "name": widget.userName},
+      final result = await ApiService.askAssistant(
+        question: "Please reply in English only.\n$text",
       );
 
-      setState(() {
-        _messages.add(
-          _AiMessage(
-            fromBot: true,
-            text: answer,
-            createdAt: DateTime.now(),
-          ),
-        );
-      });
-      _scrollToBottom();
+      Map<String, dynamic>? data;
+
+      if (result is Map<String, dynamic>) {
+        data = result as Map<String, dynamic>?;
+      } else if (result is String) {
+        // مسحاولة تحويل النص إلى JSON إذا كان السيرفر يرجع JSON كنص
+        try {
+          final decoded = jsonDecode(result);
+          if (decoded is Map<String, dynamic>) data = decoded;
+        } catch (_) {
+          // إذا لم يكن JSON، نتركه كنص عادي
+        }
+      }
+
+      String answerText;
+      if (data != null) {
+        // استخراج الرد من البيانات
+        answerText = (data["reply"] ?? data["response"] ?? data["answer"] ?? "").toString();
+        
+        // استخراج sessionId من البيانات إذا وجد
+        final sid = data["sessionId"] ?? data["session_id"] ?? data["session"];
+        if (sid != null) {
+          _sessionId = sid.toString();
+        }
+      } else {
+        answerText = result.toString();
+      }
+
+      if (mounted) {
+        setState(() {
+          _messages.add(
+            _AiMessage(
+              fromBot: true,
+              text: answerText.isEmpty ? "No reply received." : answerText,
+              createdAt: DateTime.now(),
+            ),
+          );
+        });
+      }
     } catch (e) {
-      setState(() {
-        _messages.add(
-          _AiMessage(
-            fromBot: true,
-            text:
-                "Sorry, something went wrong while contacting the assistant.\nDetails: $e",
-            createdAt: DateTime.now(),
-          ),
-        );
-      });
-      _scrollToBottom();
+      if (mounted) {
+        setState(() {
+          _messages.add(
+            _AiMessage(
+              fromBot: true,
+              text: "Sorry, I'm having trouble connecting right now.\nDetails: $e",
+              createdAt: DateTime.now(),
+            ),
+          );
+        });
+      }
     } finally {
       if (mounted) {
         setState(() => _sending = false);
+        _scrollToBottom();
       }
     }
   }
@@ -94,8 +134,8 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 80,
-          duration: const Duration(milliseconds: 250),
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
@@ -103,14 +143,19 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final bool isMobile = size.width < 600;
 
-    // 🔹 ويب / شاشات واسعة → نفس التصميم القديم 100%
     if (!isMobile) {
       const double panelWidth = 420;
-
       return Align(
         alignment: Alignment.bottomRight,
         child: Padding(
@@ -118,7 +163,7 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: panelWidth,
-              maxHeight: 560,
+              maxHeight: 600,
             ),
             child: _buildPanelLayout(isMobile: false),
           ),
@@ -126,7 +171,6 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
       );
     }
 
-    // 🔹 موبايل → بانل شبه فول سكرين، مع SafeArea وحدود خفيفة
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
@@ -134,7 +178,7 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: size.width,
-            maxHeight: size.height * 0.9,
+            maxHeight: size.height * 0.85,
           ),
           child: _buildPanelLayout(isMobile: true),
         ),
@@ -142,7 +186,6 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
     );
   }
 
-  /// نفس المحتوى للويب والموبايل، الاختلاف فقط في بعض التفاصيل البسيطة
   Widget _buildPanelLayout({required bool isMobile}) {
     return Material(
       elevation: 18,
@@ -151,215 +194,189 @@ class _AiAssistantPanelState extends State<AiAssistantPanel> {
       child: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFFEBF8FF),
-              Color(0xFFFDFEFF),
-            ],
+            colors: [Color(0xFFEBF8FF), Color(0xFFFDFEFF)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
         child: SafeArea(
-          top: isMobile, // على الموبايل نحترم الـ notch
+          top: false,
           bottom: true,
           child: Column(
             children: [
-              // ===== Header =====
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF62C6D9), Color(0xFF2F8CA5)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.smart_toy_outlined,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Smart Assistant",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            "Ask me anything about your bookings & payments",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: widget.onClose,
-                      icon: Icon(
-                        isMobile ? Icons.keyboard_arrow_down : Icons.close,
-                        color: Colors.white,
-                      ),
-                      tooltip: "Close",
-                    ),
-                  ],
-                ),
-              ),
-
-              // ===== Suggestions row =====
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                color: Colors.white.withOpacity(0.8),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _SuggestionChip(
-                        label: "How to book a session?",
-                        onTap: () {
-                          _controller.text =
-                              "How can I book a new session with an expert?";
-                          _send();
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      _SuggestionChip(
-                        label: "Payment & refund rules",
-                        onTap: () {
-                          _controller.text =
-                              "Explain the payment and refund rules for bookings.";
-                          _send();
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      _SuggestionChip(
-                        label: "My upcoming bookings",
-                        onTap: () {
-                          _controller.text =
-                              "What are my upcoming bookings and their status?";
-                          _send();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
+              _buildHeader(isMobile),
+              _buildSuggestions(),
               const Divider(height: 1),
-
-              // ===== Messages list =====
               Expanded(
                 child: Container(
                   color: _bg,
                   child: ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 12),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {
-                      final msg = _messages[index];
-                      return _MessageBubble(message: msg);
+                      return _MessageBubble(message: _messages[index]);
                     },
                   ),
                 ),
               ),
-
-              // ===== Input area =====
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 10,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: TextField(
-                          controller: _controller,
-                          minLines: 1,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            border: InputBorder.none,
-                            hintText: "Ask me anything...",
-                          ),
-                          onSubmitted: (_) => _send(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 40,
-                      width: 40,
-                      child: FloatingActionButton(
-                        heroTag: "assistantSend",
-                        backgroundColor:
-                            _sending ? Colors.grey.shade400 : _brandDark,
-                        onPressed: _sending ? null : _send,
-                        child: _sending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation(Colors.white),
-                                ),
-                              )
-                            : const Icon(
-                                Icons.send_rounded,
-                                size: 18,
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildInputBar(),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _buildHeader(bool isMobile) {
+    final sid = _sessionId;
+    final shortSid = (sid != null && sid.length >= 8) ? sid.substring(0, 8) : "New";
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF62C6D9), Color(0xFF2F8CA5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.smart_toy_outlined,
+                color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Smart Assistant (${widget.userName})",
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15),
+                ),
+                Text(
+                  "Session: $shortSid | Online",
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: widget.onClose,
+            icon:
+                Icon(isMobile ? Icons.keyboard_arrow_down : Icons.close, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestions() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: Colors.white.withOpacity(0.8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _SuggestionChip(
+              label: "My Bookings",
+              onTap: () {
+                _controller.text = "Show me my active bookings";
+                _send();
+              },
+            ),
+            const SizedBox(width: 8),
+            _SuggestionChip(
+              label: "Payment Rules",
+              onTap: () {
+                _controller.text = "How does payment work?";
+                _send();
+              },
+            ),
+            const SizedBox(width: 8),
+            _SuggestionChip(
+              label: "Cancel Policy",
+              onTap: () {
+                _controller.text = "How can I cancel a booking?";
+                _send();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: TextField(
+                controller: _controller,
+                minLines: 1,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: "Type a message...",
+                  hintStyle: TextStyle(fontSize: 14),
+                ),
+                onSubmitted: (_) => _send(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _sending ? null : _send,
+            child: CircleAvatar(
+              backgroundColor: _sending ? Colors.grey : _brandDark,
+              child: _sending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-// =========================
-//  Models + Widgets مساعدة
-// =========================
+// --------------------------------------------------------------------------
+// Helper Models & Widgets
+// --------------------------------------------------------------------------
 
 class _AiMessage {
   final bool fromBot;
@@ -381,44 +398,34 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isBot = message.fromBot;
-    final alignment = isBot ? Alignment.centerLeft : Alignment.centerRight;
-    final bg = isBot ? Colors.white : const Color(0xFF62C6D9);
-    final textColor = isBot ? const Color(0xFF0F172A) : Colors.white;
-
     return Align(
-      alignment: alignment,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 320,
-        ),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(16),
-              topRight: const Radius.circular(16),
-              bottomLeft:
-                  isBot ? const Radius.circular(4) : const Radius.circular(16),
-              bottomRight:
-                  isBot ? const Radius.circular(16) : const Radius.circular(4),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
+      alignment: isBot ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          color: isBot ? Colors.white : const Color(0xFF62C6D9),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isBot ? 4 : 16),
+            bottomRight: Radius.circular(isBot ? 16 : 4),
           ),
-          child: Text(
-            message.text,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 13.5,
-              height: 1.4,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
             ),
+          ],
+        ),
+        child: Text(
+          message.text,
+          style: TextStyle(
+            color: isBot ? const Color(0xFF0F172A) : Colors.white,
+            fontSize: 14,
+            height: 1.4,
           ),
         ),
       ),
@@ -430,41 +437,19 @@ class _SuggestionChip extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _SuggestionChip({
-    required this.label,
-    required this.onTap,
-  });
+  const _SuggestionChip({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE5F3F8),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFFB6D6E4)),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.bolt_outlined,
-              size: 14,
-              color: Color(0xFF285E6E),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11.5,
-                color: Color(0xFF285E6E),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+    return ActionChip(
+      onPressed: onTap,
+      backgroundColor: const Color(0xFFE5F3F8),
+      side: const BorderSide(color: Color(0xFFB6D6E4)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      avatar: const Icon(Icons.bolt, size: 16, color: Color(0xFF285E6E)),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 12, color: Color(0xFF285E6E), fontWeight: FontWeight.w500),
       ),
     );
   }

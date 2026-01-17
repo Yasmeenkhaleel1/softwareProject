@@ -1,17 +1,21 @@
 // lib/pages/admin_dashboard_page.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_app/pages/landing_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 import '../widgets/stat_card.dart';
-import '../widgets/chart_card.dart'; // للـ Bookings
+import '../widgets/chart_card.dart';
 import 'admin_expert_page.dart';
 import 'admin_payments_page.dart';
-import 'admin_disputes_page.dart'; // صفحة النزاعات
-
+import 'admin_disputes_page.dart';
 import 'admin_earnings_page.dart';
+import '../config/api_config.dart';
+
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
 
@@ -23,6 +27,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  // ======================
+  // MOBILE STATE
+  // ======================
+  int _mobileIndex = 0;
+  late List<Widget> _mobilePages;
+
+  // ======================
+  // DATA
+  // ======================
   bool loadingStats = true;
   bool loadingExperts = true;
 
@@ -42,23 +55,57 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
   List<dynamic> pendingExperts = [];
 
-  static const baseUrl = "http://localhost:5000";
+  // ======================
+  // BASE URL
+  // ======================
+  String getBaseUrl() {
+    if (kIsWeb) return "http://localhost:5000";
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return "http://10.0.2.2:5000";
+      case TargetPlatform.iOS:
+        return "http://localhost:5000";
+      default:
+        return "http://localhost:5000";
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+
     _tabController = TabController(length: 5, vsync: this);
+
+    // تهيئة صفحات الموبايل
+    _mobilePages = [
+      const SizedBox(), // سيتم تعبئته لاحقاً
+      const SizedBox(),
+      AdminPaymentsPage(),
+      AdminEarningsPage(),
+      const AdminDisputesPage(),
+    ];
+
     _fetchDashboardStats();
     _fetchPendingExperts();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // ======================
+  // API CALLS
+  // ======================
   Future<void> _fetchDashboardStats() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
 
       final res = await http.get(
-        Uri.parse("$baseUrl/api/admin/stats"),
+        Uri.parse("${getBaseUrl()}/api/admin/stats"),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -88,11 +135,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           loadingStats = false;
         });
       } else {
-        debugPrint("❌ Stats error: ${res.statusCode}");
         setState(() => loadingStats = false);
       }
-    } catch (e) {
-      debugPrint("⚠️ Error fetching stats: $e");
+    } catch (_) {
       setState(() => loadingStats = false);
     }
   }
@@ -103,7 +148,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final token = prefs.getString('token') ?? '';
 
       final res = await http.get(
-        Uri.parse("$baseUrl/api/admin/experts/pending"),
+        Uri.parse("${getBaseUrl()}/api/admin/experts/pending"),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -114,11 +159,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           loadingExperts = false;
         });
       } else {
-        debugPrint("❌ Pending experts error: ${res.statusCode}");
         setState(() => loadingExperts = false);
       }
-    } catch (e) {
-      debugPrint("⚠️ Error fetching pending experts: $e");
+    } catch (_) {
       setState(() => loadingExperts = false);
     }
   }
@@ -129,7 +172,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final token = prefs.getString('token') ?? '';
 
       final res = await http.patch(
-        Uri.parse("$baseUrl/api/admin/experts/$id/approve"),
+        Uri.parse("${getBaseUrl()}/api/admin/experts/$id/approve"),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -169,8 +212,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
             child: const Text("Reject"),
           ),
@@ -185,7 +227,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       final token = prefs.getString('token') ?? '';
 
       final res = await http.patch(
-        Uri.parse("$baseUrl/api/admin/experts/$id/reject"),
+        Uri.parse("${getBaseUrl()}/api/admin/experts/$id/reject"),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -204,111 +246,218 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     }
   }
 
+  // ======================
+  // BUILD
+  // ======================
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 760;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
- appBar: PreferredSize(
-  preferredSize: const Size.fromHeight(165), // 🔥 أصغر من 180
-  child: ClipRRect(
-    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+      appBar: isMobile ? _buildMobileAppBar() : null,
+      body: isMobile ? _buildMobileBody() : _buildWebView(),
+      bottomNavigationBar: isMobile ? _buildMobileBottomNav() : null,
+    );
+  }
+
+  // ======================
+  // MOBILE UI
+  // ======================
+PreferredSizeWidget _buildMobileAppBar() {
+  return PreferredSize(
+    preferredSize: const Size.fromHeight(70),
     child: Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF62C6D9).withOpacity(0.85),
-            const Color(0xFF347C8B).withOpacity(0.90),
-            const Color(0xFF244C63).withOpacity(0.95),
+            Color(0xFF62C6D9),
+            Color(0xFF347C8B),
+            Color(0xFF244C63),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: Column(
-        children: [
-          const SizedBox(height: 4),
-
-          // 🔹 Back Button داخل SafeArea
-          SafeArea(
-            bottom: false,
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back,
-                      color: Colors.white, size: 24),
-                  onPressed: () => Navigator.pop(context),
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                "Lost Treasures",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white, // ✅ أبيض
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                 ),
-              ],
-            ),
-          ),
-
-          // 🔹 العنوان + الأنيميشن
-          TweenAnimationBuilder(
-            tween: Tween<double>(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 800),
-            builder: (context, value, child) => Opacity(
-              opacity: value,
-              child: Transform.translate(
-                offset: Offset(0, (1 - value) * -10),
-                child: child,
               ),
             ),
-            child: const Text(
-              "Admin Dashboard",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,    // 🔥 أصغر من 22
-                fontWeight: FontWeight.bold,
-              ),
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.clear();
+
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => LandingPage(
+                      isLoggedIn: false,
+                      onLogout: () {},
+                    ),
+                  ),
+                  (_) => false,
+                );
+              },
             ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // 🔹 Tab Bar
-          TabBar(
-            controller: _tabController,
-            indicator: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: Colors.white.withOpacity(0.25),
-            ),
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            tabs: const [
-              Tab(icon: Icon(Icons.dashboard_customize), text: "Dashboard"),
-              Tab(icon: Icon(Icons.pending_actions), text: "Experts"),
-              Tab(icon: Icon(Icons.payments), text: "Payments"),
-              Tab(icon: Icon(Icons.show_chart), text: "Earnings"),
-               Tab(icon: Icon(Icons.gavel_outlined), text: "Disputes"),
-            ],
-          ),
-
-          const SizedBox(height: 6),
-        ],
+          ],
+        ),
       ),
     ),
-  ),
-),
+  );
+}
 
+  Widget _buildMobileBody() {
+    // تحديث صفحات الموبايل ببيانات حية
+    _mobilePages = [
+      _buildMobileDashboard(),
+      _buildPendingExperts(),
+      AdminPaymentsPage(),
+      AdminEarningsPage(),
+      const AdminDisputesPage(),
+    ];
 
+    return IndexedStack(
+      index: _mobileIndex,
+      children: _mobilePages,
+    );
+  }
 
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildMainDashboard(),
-          _buildPendingExperts(),
-          AdminPaymentsPage(),   // صفحة الدفع
-          AdminEarningsPage(),   // صفحة الإيرادات
-          const AdminDisputesPage() 
-        ],
+  Widget _buildMobileBottomNav() {
+    return BottomNavigationBar(
+      currentIndex: _mobileIndex,
+      onTap: (i) => setState(() => _mobileIndex = i),
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: const Color(0xFF2970B8),
+      unselectedItemColor: Colors.grey,
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: "Dashboard"),
+        BottomNavigationBarItem(icon: Icon(Icons.people), label: "Experts"),
+        BottomNavigationBarItem(icon: Icon(Icons.payments), label: "Payments"),
+        BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: "Earnings"),
+        BottomNavigationBarItem(icon: Icon(Icons.gavel), label: "Disputes"),
+      ],
+    );
+  }
+
+  // ======================
+  // WEB UI
+  // ======================
+  Widget _buildWebView() {
+    return Column(
+      children: [
+        _buildWebAppBar(),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildWebDashboard(),
+              _buildPendingExperts(),
+              AdminPaymentsPage(),
+              AdminEarningsPage(),
+              const AdminDisputesPage(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  PreferredSize _buildWebAppBar() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(165),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF62C6D9).withOpacity(0.85),
+                const Color(0xFF347C8B).withOpacity(0.90),
+                const Color(0xFF244C63).withOpacity(0.95),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 4),
+              SafeArea(
+                bottom: false,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              TweenAnimationBuilder(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: const Duration(milliseconds: 800),
+                builder: (context, value, child) => Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - value) * -10),
+                    child: child,
+                  ),
+                ),
+                child: const Text(
+                  "Admin Dashboard",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.white.withOpacity(0.25),
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                tabs: const [
+                  Tab(icon: Icon(Icons.dashboard_customize), text: "Dashboard"),
+                  Tab(icon: Icon(Icons.pending_actions), text: "Experts"),
+                  Tab(icon: Icon(Icons.payments), text: "Payments"),
+                  Tab(icon: Icon(Icons.show_chart), text: "Earnings"),
+                  Tab(icon: Icon(Icons.gavel_outlined), text: "Disputes"),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  // =======================
-  // 🧮 Main Dashboard (Analytics)
-  // =======================
-  Widget _buildMainDashboard() {
+  // ======================
+  // DASHBOARDS
+  // ======================
+  Widget _buildWebDashboard() {
     if (loadingStats) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF62C6D9)),
@@ -332,48 +481,154 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
               mainAxisSpacing: 16,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                StatCard(
-                    title: "Users",
-                    value: "$totalUsers",
-                    icon: Icons.people),
-                StatCard(
-                    title: "Experts",
-                    value: "$totalExperts",
-                    icon: Icons.engineering),
-                StatCard(
-                    title: "Services",
-                    value: "$totalServices",
-                    icon: Icons.home_repair_service),
-                StatCard(
-                  title: "Bookings",
-                  value: "$totalBookings",
-                  icon: Icons.event_available,
-                ),
+                StatCard(title: "Users", value: "$totalUsers", icon: Icons.people),
+                StatCard(title: "Experts", value: "$totalExperts", icon: Icons.engineering),
+                StatCard(title: "Services", value: "$totalServices", icon: Icons.home_repair_service),
+                StatCard(title: "Bookings", value: "$totalBookings", icon: Icons.event_available),
               ],
             ),
             const SizedBox(height: 24),
             Row(
               children: [
-                Expanded(
-                  child: ChartCard(data: monthlyBookings),
-                ),
+                Expanded(child: ChartCard(data: monthlyBookings)),
                 const SizedBox(width: 20),
-                Expanded(
-                  child: RevenueChartCard(data: revenueByMonth),
-                ),
+                Expanded(child: RevenueChartCard(data: revenueByMonth)),
               ],
             ),
             const SizedBox(height: 24),
-           
+            if (paymentsByStatus.isNotEmpty)
+              PaymentsStatusPieCard(data: paymentsByStatus),
           ],
         ),
       ),
     );
   }
 
-  Widget _headerGradientCard() {
-    const primary = Color(0xFF62C6D9);
+  Widget _buildMobileDashboard() {
+    if (loadingStats) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF62C6D9)),
+      );
+    }
 
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: _headerGradientCardMobile(),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.5,
+              children: [
+                _miniStat("Users", totalUsers),
+                _miniStat("Experts", totalExperts),
+                _miniStat("Services", totalServices),
+                _miniStat("Bookings", totalBookings),
+              ],
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                ChartCard(data: monthlyBookings),
+                const SizedBox(height: 20),
+                RevenueChartCard(data: revenueByMonth),
+                const SizedBox(height: 20),
+                if (paymentsByStatus.isNotEmpty)
+                  PaymentsStatusPieCard(data: paymentsByStatus),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _headerGradientCardMobile() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF62C6D9),
+            Color(0xFF347C8B),
+            Color(0xFF244C63),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Platform Earnings Overview",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Track total revenue, expert payouts and refunds in real-time.",
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _miniKpi(
+                label: "Total Revenue",
+                value: "\$${totalRevenue.toStringAsFixed(2)}",
+              ),
+              _miniKpi(
+                label: "Expert Earnings",
+                value: "\$${expertEarnings.toStringAsFixed(2)}",
+              ),
+              _miniKpi(
+                label: "Platform Fees",
+                value: "\$${platformEarnings.toStringAsFixed(2)}",
+              ),
+              _miniKpi(
+                label: "Refunds",
+                value: "\$${refundsTotal.toStringAsFixed(2)}",
+                chipColor: Colors.redAccent,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerGradientCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -462,13 +717,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                   Text(
                     "Live Analytics",
                     style: TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13),
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                   ),
                   SizedBox(height: 8),
                   Text(
-                    "LostTreasure is ready for investors.\nYour dashboard looks like a global SaaS.",
+                    "Your dashboard provides real-time insights into platform performance.",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -477,7 +733,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -525,9 +781,47 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
     );
   }
 
-  // =======================
-  // 👥 Pending Experts Tab
-  // =======================
+  Widget _miniStat(String title, int value) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            "$value",
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2933),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ======================
+  // PENDING EXPERTS
+  // ======================
   Widget _buildPendingExperts() {
     if (loadingExperts) {
       return const Center(
@@ -548,53 +842,77 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       padding: const EdgeInsets.all(16),
       itemCount: pendingExperts.length,
       itemBuilder: (context, index) {
+      
         final expert = pendingExperts[index];
         final user = expert['userId'] ?? {};
         final displayName = user['name'] ?? expert['name'] ?? "Unknown Expert";
         final email = user['email'] ?? "";
-        final profileImageUrl = expert['profileImageUrl'] ??
-            "http://localhost:5000/uploads/default_profile.png";
+       final raw = (expert['profileImageUrl']
+        ?? (expert['profile']?['profileImageUrl'])
+        ?? (expert['expertProfile']?['profileImageUrl'])
+        ?? '').toString();
+final profileImageUrl = ApiConfig.fixAssetUrl(
+  raw.isNotEmpty ? raw : "/uploads/profile_pictures.png",
+);
+
 
         return Card(
           elevation: 3,
           margin: const EdgeInsets.symmetric(vertical: 10),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           child: ListTile(
-            leading: CircleAvatar(
-              radius: 25,
-              backgroundImage: profileImageUrl.startsWith("http")
-                  ? NetworkImage(profileImageUrl)
-                  : const AssetImage('assets/images/profile_placeholder.png')
-                      as ImageProvider,
-            ),
-            title: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AdminExpertPage(
-                      expertId: expert['_id'],
-                    ),
-                  ),
-                );
-              },
-              child: Text(
-                displayName,
-                style: const TextStyle(
-                  color: Colors.blueAccent,
-                  fontWeight: FontWeight.bold,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
+           leading: CircleAvatar(
+  radius: 25,
+  backgroundColor: const Color(0xFF62C6D9).withOpacity(0.15),
+  backgroundImage: profileImageUrl.isNotEmpty
+      ? NetworkImage(profileImageUrl)
+      : const AssetImage('assets/images/profile_placeholder.png') as ImageProvider,
+),
+
+            title: Row(
+  children: [
+    Expanded(
+      child: Text(
+        displayName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ),
+    const SizedBox(width: 10),
+    ElevatedButton(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AdminExpertPage(expertId: expert['_id']),
+          ),
+        );
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF347C8B),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      child: const Text(
+        "View",
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
+    ),
+  ],
+),
+
             subtitle: Text(email),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  icon:
-                      const Icon(Icons.check_circle, color: Colors.green),
+                  icon: const Icon(Icons.check_circle, color: Colors.green),
                   onPressed: () => _approveExpert(expert['_id']),
                 ),
                 IconButton(
@@ -642,6 +960,8 @@ class RevenueChartCard extends StatelessWidget {
     const primary = Color(0xFF62C6D9);
     const accent = Color(0xFF244C63);
 
+    final isMobile = MediaQuery.of(context).size.width < 760;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -673,7 +993,7 @@ class RevenueChartCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           SizedBox(
-            height: 200,
+            height: isMobile ? 180 : 200,
             child: LineChart(
               LineChartData(
                 minX: 1,
@@ -729,10 +1049,8 @@ class RevenueChartCard extends StatelessWidget {
                       },
                     ),
                   ),
-                  rightTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
@@ -773,7 +1091,7 @@ class RevenueChartCard extends StatelessWidget {
               SizedBox(width: 16),
               _LegendDot(color: accent, label: "Net to experts"),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -790,7 +1108,6 @@ class PaymentsStatusPieCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // statuses اللي نهتم فيها
     final importantStatuses = [
       "AUTHORIZED",
       "CAPTURED",
@@ -843,6 +1160,8 @@ class PaymentsStatusPieCard extends StatelessWidget {
       Colors.redAccent,
     ];
 
+    final isMobile = MediaQuery.of(context).size.width < 760;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -856,39 +1175,8 @@ class PaymentsStatusPieCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 200,
-              child: PieChart(
-                PieChartData(
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 40,
-                  sections: List.generate(entries.length, (i) {
-                    final e = entries[i];
-                    final count = e['count'] as int;
-                    final status = e['status'] as String;
-                    final percent = (count / totalCount) * 100;
-                    return PieChartSectionData(
-                      value: count.toDouble(),
-                      color: colors[i % colors.length],
-                      radius: 70,
-                      title: "${percent.toStringAsFixed(1)}%",
-                      titleStyle: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    );
-                  }),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: isMobile
+          ? Column(
               children: [
                 const Text(
                   "Payments Status Breakdown",
@@ -902,6 +1190,32 @@ class PaymentsStatusPieCard extends StatelessWidget {
                 const Text(
                   "See how many payments are captured, refunded or still pending.",
                   style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 200,
+                  child: PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 40,
+                      sections: List.generate(entries.length, (i) {
+                        final e = entries[i];
+                        final count = e['count'] as int;
+                        final percent = (count / totalCount) * 100;
+                        return PieChartSectionData(
+                          value: count.toDouble(),
+                          color: colors[i % colors.length],
+                          radius: 70,
+                          title: "${percent.toStringAsFixed(1)}%",
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 ...List.generate(entries.length, (i) {
@@ -927,23 +1241,109 @@ class PaymentsStatusPieCard extends StatelessWidget {
                           child: Text(
                             status,
                             style: const TextStyle(
-                                fontSize: 12, fontWeight: FontWeight.w500),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                         Text(
                           "$count • ${percent.toStringAsFixed(1)}%",
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.grey),
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
                         ),
                       ],
                     ),
                   );
                 }),
               ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 200,
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 40,
+                        sections: List.generate(entries.length, (i) {
+                          final e = entries[i];
+                          final count = e['count'] as int;
+                          final percent = (count / totalCount) * 100;
+                          return PieChartSectionData(
+                            value: count.toDouble(),
+                            color: colors[i % colors.length],
+                            radius: 70,
+                            title: "${percent.toStringAsFixed(1)}%",
+                            titleStyle: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Payments Status Breakdown",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: Color(0xFF1F2933),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        "See how many payments are captured, refunded or still pending.",
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 12),
+                      ...List.generate(entries.length, (i) {
+                        final e = entries[i];
+                        final count = e['count'] as int;
+                        final status = e['status'] as String;
+                        final percent = (count / totalCount) * 100;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: colors[i % colors.length],
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  status,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                "$count • ${percent.toStringAsFixed(1)}%",
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -960,13 +1360,12 @@ class _LegendDot extends StatelessWidget {
         Container(
           width: 10,
           height: 10,
-          decoration:
-              BoxDecoration(color: color, shape: BoxShape.circle),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: Colors.grey),
+          style: const TextStyle(fontSize: 11, color: Color.fromARGB(255, 253, 142, 142)),
         ),
       ],
     );

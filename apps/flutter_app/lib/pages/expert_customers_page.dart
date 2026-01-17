@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
-import '../../api/api_service.dart';
+import '../../api/api_service.dart'; // ✅ احتفظي بـ ApiService
+import '../../config/api_config.dart'; // ✅ للإصلاح فقط
 import './chat/chat_page.dart';
 
 class ExpertCustomersPage extends StatefulWidget {
@@ -51,7 +55,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
         return;
       }
 
-      // نجيب كل الحجوزات لهذا الخبير (من الـ API الخاص بالخبير)
+      // ✅ استخدمي ApiService كما كانت
       final bookings = await ApiService.fetchExpertBookings();
 
       // نكوّن خريطة: customerId -> _CustomerContact
@@ -63,17 +67,17 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
 
         // الكستمر جاينا من populate("customer", ...)
         final customer =
-            (b['customer'] as Map?)?.cast<String, dynamic>() ??
-                <String, dynamic>{};
+            (b['customer'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
 
         final customerId = customer['_id']?.toString();
         if (customerId == null || customerId.isEmpty) continue;
 
-        final customerName =
-            (customer['name'] ?? customer['email'] ?? 'Customer')
-                .toString();
+        final customerName = (customer['name'] ?? customer['email'] ?? 'Customer').toString();
         final customerEmail = (customer['email'] ?? '').toString();
-        final avatar = (customer['profilePic'] ?? '').toString();
+
+        // ✅ فقط هنا أصلحي رابط الصورة
+        String rawAvatar = (customer['profilePic'] ?? customer['profileImageUrl'] ?? '').toString();
+        final avatarUrl = ApiConfig.fixAssetUrl(rawAvatar); // ✅ الإصلاح الوحيد
 
         final startAtStr = (b['startAt'] ?? '').toString();
         DateTime? startAt;
@@ -87,7 +91,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
             id: customerId,
             name: customerName,
             email: customerEmail,
-            avatarUrl: avatar,
+            avatarUrl: avatarUrl, // ✅ استخدام الرابط المصحح
             lastBookingAt: startAt,
             totalBookings: 1,
           );
@@ -95,8 +99,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
           final existing = map[key]!;
           existing.totalBookings += 1;
           if (startAt != null) {
-            if (existing.lastBookingAt == null ||
-                existing.lastBookingAt!.isBefore(startAt)) {
+            if (existing.lastBookingAt == null || existing.lastBookingAt!.isBefore(startAt)) {
               existing.lastBookingAt = startAt;
             }
           }
@@ -129,7 +132,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
 
   Future<void> _openChatWithCustomer(_CustomerContact customer) async {
     try {
-      // نستخدم API خاص بالخبير
+      // ✅ استخدمي ApiService كما كانت
       final conv = await ApiService.getOrCreateConversationAsExpert(
         customerId: customer.id,
       );
@@ -143,8 +146,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
           builder: (_) => ChatPage(
             conversationId: convId,
             otherUserName: customer.name,
-            otherUserAvatar:
-                customer.avatarUrl.isNotEmpty ? customer.avatarUrl : null,
+            otherUserAvatar: customer.avatarUrl.isNotEmpty ? customer.avatarUrl : null,
           ),
         ),
       );
@@ -171,6 +173,8 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
         title: const Text(
           "My Customers",
           style: TextStyle(fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
       body: _loading
@@ -193,8 +197,7 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                       child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [_brandDark, _brand],
@@ -278,11 +281,9 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
                           : RefreshIndicator(
                               onRefresh: _loadCustomersFromBookings,
                               child: ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(
-                                    16, 8, 16, 16),
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                                 itemCount: _customers.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
+                                separatorBuilder: (_, __) => const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
                                   final customer = _customers[index];
                                   return _buildCustomerCard(customer);
@@ -300,134 +301,170 @@ class _ExpertCustomersPageState extends State<ExpertCustomersPage> {
         ? "${customer.lastBookingAt!.year}-${customer.lastBookingAt!.month.toString().padLeft(2, '0')}-${customer.lastBookingAt!.day.toString().padLeft(2, '0')}"
         : "—";
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isCompact = constraints.maxWidth < 520; // ✅ موب/عرض ضيق
+        final messageButton = FilledButton.icon(
+          onPressed: () => _openChatWithCustomer(customer),
+          style: FilledButton.styleFrom(
+            backgroundColor: _brand,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
-        ],
-        border: Border.all(color: const Color(0xFFE3EBF3)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => _openChatWithCustomer(customer),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              // Avatar
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: _brand.withOpacity(0.15),
-                backgroundImage: customer.avatarUrl.isNotEmpty
-                    ? NetworkImage(customer.avatarUrl)
-                    : null,
-                child: customer.avatarUrl.isEmpty
-                    ? Text(
-                        customer.name.isNotEmpty
-                            ? customer.name[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          color: _brandDark,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 14),
+          icon: const Icon(Icons.message, size: 18),
+          label: const Text(
+            "Message",
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        );
 
-              // نصوص + معلومات
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      customer.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (customer.email.isNotEmpty)
-                      Text(
-                        customer.email,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.event_available,
-                            size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text(
-                          "Bookings: ${customer.totalBookings}",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Icon(Icons.access_time,
-                            size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 4),
-                        Text(
-                          "Last: $lastStr",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 10),
-
-              // زر المسج
-              FilledButton.icon(
-                onPressed: () => _openChatWithCustomer(customer),
-                style: FilledButton.styleFrom(
-                  backgroundColor: _brand,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                icon: const Icon(Icons.message, size: 18),
-                label: const Text(
-                  "Message",
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
+            border: Border.all(color: const Color(0xFFE3EBF3)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => _openChatWithCustomer(customer),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: isCompact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 26,
+                              backgroundColor: _brand.withOpacity(0.15),
+                              backgroundImage: customer.avatarUrl.isNotEmpty ? NetworkImage(customer.avatarUrl) : null,
+                              child: customer.avatarUrl.isEmpty
+                                  ? Text(
+                                      customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
+                                      style: const TextStyle(
+                                        color: _brandDark,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(child: _customerInfo(customer, lastStr, compact: true)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(width: double.infinity, child: messageButton), // ✅ الزر ينزل تحت ويأخذ العرض
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 26,
+                          backgroundColor: _brand.withOpacity(0.15),
+                          backgroundImage: customer.avatarUrl.isNotEmpty ? NetworkImage(customer.avatarUrl) : null,
+                          child: customer.avatarUrl.isEmpty
+                              ? Text(
+                                  customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
+                                  style: const TextStyle(
+                                    color: _brandDark,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(child: _customerInfo(customer, lastStr, compact: false)),
+                        const SizedBox(width: 10),
+                        messageButton,
+                      ],
+                    ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _customerInfo(_CustomerContact customer, String lastStr, {required bool compact}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          customer.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis, // ✅ منع overflow بالاسم
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0F172A),
           ),
         ),
-      ),
+        const SizedBox(height: 4),
+        if (customer.email.isNotEmpty)
+          Text(
+            customer.email,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis, // ✅ منع overflow بالإيميل
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade700,
+            ),
+          ),
+        const SizedBox(height: 6),
+
+        // ✅ بدل Row (اللي بيسبب overflow) نستخدم Wrap على الشاشات الضيقة
+        Wrap(
+          spacing: 12,
+          runSpacing: 6,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.event_available, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  "Bookings: ${customer.totalBookings}",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                ),
+              ],
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  "Last: $lastStr",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
 
 class _CustomerContact {
-  final String id;          // User._id للكستمر
+  final String id; // User._id للكستمر
   final String name;
   final String email;
   final String avatarUrl;

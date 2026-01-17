@@ -1,3 +1,4 @@
+//notification.routes
 import { Router } from "express";
 import { auth } from "../middleware/auth.js";
 import Notification from "../models/notification.model.js";

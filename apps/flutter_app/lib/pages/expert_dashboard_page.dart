@@ -17,7 +17,9 @@ import 'expert_customers_page.dart';
 import 'my_availability_page.dart';
 import 'expert_earnings_page.dart';
 import '../config/api_config.dart';
-
+import '../services/notif_badge.dart';
+import '../services/message_badge.dart';
+import 'notifications_page.dart';
 class ExpertDashboardPage extends StatefulWidget {
   const ExpertDashboardPage({super.key});
 
@@ -59,6 +61,8 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   void initState() {
     super.initState();
     _loadAllData();
+    NotifBadge.refresh();
+     MessageBadge.refresh();
   }
 
   Future<void> _loadAllData() async {
@@ -136,27 +140,18 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
   }
 
   Future<void> _fetchNotifications() async {
-    try {
-      final token = await _getToken();
-      final res = await http.get(
-        Uri.parse("${ApiConfig.baseUrl}/api/notifications"),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        setState(() {
-          _notifications = data['notifications'] ?? [];
-          _loadingNotifs = false;
-        });
-      } else {
-        setState(() => _loadingNotifs = false);
-      }
-    } catch (e) {
-      debugPrint("Error fetching notifications: $e");
-      setState(() => _loadingNotifs = false);
-    }
+  try {
+    final items = await NotificationsAPI.getAll();
+    setState(() {
+      _notifications = items;
+      _loadingNotifs = false;
+    });
+  } catch (e) {
+    debugPrint("Error fetching notifications: $e");
+    setState(() => _loadingNotifs = false);
   }
+}
+
 
   Future<void> _loadStripeStatus() async {
     try {
@@ -451,60 +446,119 @@ class _ExpertDashboardPageState extends State<ExpertDashboardPage> {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.message_outlined, color: Colors.white),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ConversationsPage()),
-          ),
-        ),
+        _buildMessageButton(),
         _buildNotificationsButton(),
         const SizedBox(width: 8),
       ],
     );
   }
 
-  Widget _buildNotificationsButton() {
-    return Stack(
-      children: [
-        IconButton(
-          icon: const Icon(Icons.notifications_none, color: Colors.white),
-          onPressed: () async {
-            await NotificationsAPI.markAllAsRead();
-            setState(() => _notifOpen = !_notifOpen);
-            _fetchNotifications();
+Widget _buildMessageButton() {
+  return Stack(
+    children: [
+      IconButton(
+        icon: const Icon(Icons.message_outlined, color: Colors.white),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ConversationsPage()),
+          );
+
+          await MessageBadge.refresh(); // ✅ بعد الرجوع
+        },
+      ),
+      Positioned(
+        right: 6,
+        top: 6,
+        child: ValueListenableBuilder<int>(
+          valueListenable: MessageBadge.unread,
+          builder: (context, count, _) {
+            if (count == 0) return const SizedBox();
+            return Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                "$count",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            );
           },
         ),
-        Positioned(
-          right: 6,
-          top: 6,
-          child: FutureBuilder(
-            future: NotificationsAPI.getUnreadCount(),
-            builder: (context, snap) {
-              if (!snap.hasData || snap.data == 0) {
-                return const SizedBox();
-              }
+      ),
+    ],
+  );
+}
+
+
+
+Widget _buildNotificationsButton() {
+  return Stack(
+    clipBehavior: Clip.none,
+    children: [
+      IconButton(
+        icon: const Icon(Icons.notifications_none, color: Colors.white),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationsPage()),
+          );
+
+          await NotifBadge.refresh();
+          await _fetchNotifications();
+          setState(() {});
+        },
+      ),
+
+      // ✅ Badge (لا يلتقط الضغط + حجم أصغر)
+      Positioned(
+        right: 6,
+        top: 6,
+        child: IgnorePointer(
+          ignoring: true, // ⭐ مهم: خلي الضغط يروح للـ IconButton
+          child: ValueListenableBuilder<int>(
+            valueListenable: NotifBadge.unread,
+            builder: (context, count, _) {
+              if (count <= 0) return const SizedBox();
+
+              final text = (count > 99) ? "99+" : "$count";
+
               return Container(
-                padding: const EdgeInsets.all(5),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.red,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(
-                  "${snap.data}",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                child: Center(
+                  child: Text(
+                    text,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      height: 1.0,
+                    ),
                   ),
                 ),
               );
             },
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
+
 
   Widget _buildBody(Map<String, dynamic> profileData) {
     return Stack(
@@ -1522,53 +1576,73 @@ Widget _buildEarningsChartCard() {
                 ? const Text("No new notifications", style: TextStyle(color: Colors.grey))
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: _notifications.take(5).map((notif) {
-                      final title = notif['title'] ?? "Notification";
-                      final message = notif['message'] ?? "";
-                      final type = notif['type'] ?? 'info';
-                      final Color base = (type == 'success')
-                          ? Colors.green
-                          : (type == 'error')
-                              ? Colors.redAccent
-                              : (type == 'warning')
-                                  ? Colors.orange
-                                  : Colors.blueAccent;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: base.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: base.withOpacity(0.35)),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.notifications, color: base, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    message,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
+                  children: _notifications.take(5).map((notif) {
+  final title = (notif['title'] ?? "Notification").toString();
+  final body  = (notif['body'] ?? "").toString();
+  final readAt = notif['readAt']; // null => unread
+  final isUnread = readAt == null;
+  final link = (notif['link'] ?? "").toString();
+  final id = (notif['_id'] ?? "").toString();
+
+  final base = isUnread ? Colors.blueAccent : Colors.grey;
+
+  return InkWell(
+    borderRadius: BorderRadius.circular(12),
+    onTap: () async {
+      // ✅ read
+      if (id.isNotEmpty && isUnread) {
+        await NotificationsAPI.markOneAsRead(id);
+        await NotifBadge.refresh();
+        await _fetchNotifications();
+      }
+
+      // ✅ navigation (اختياري)
+      if (link.isNotEmpty) {
+        // TODO: router حسب link
+      }
+    },
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: base.withOpacity(isUnread ? 0.10 : 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: base.withOpacity(0.30)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isUnread ? Icons.notifications_active : Icons.notifications_none,
+            color: base,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: isUnread ? FontWeight.w800 : FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}).toList(),
+
                   ),
       ),
     );

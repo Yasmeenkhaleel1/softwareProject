@@ -10,6 +10,7 @@ import Payment from "../models/payment.model.js";
 import Service from "../models/expert/service.model.js";
 import ExpertProfile from "../models/expert/expertProfile.model.js";
 import { assertNoOverlap } from "../services/booking.service.js";
+import { notifyUser } from "../services/push.service.js";
 
 import User from "../models/user/user.model.js";
 
@@ -263,12 +264,27 @@ export async function createBookingPublic(req, res) {
           },
     });
 
+  // ✅ إشعار للخبير: حجز جديد (PENDING)
+try {
+  await notifyUser(expertUserId, {
+    title: "📩 New Booking Request",
+    body: `You received a new booking request for "${svc.title}".`,
+    data: {
+      type: "BOOKING_CREATED",
+      bookingId: String(booking._id),
+      expertId: String(expertId),
+      customerId: String(customerId),
+      status: "PENDING",
+    },
+    // ✅ هذا الرابط اللي بدنا نستخدمه داخل الجرس للتوجيه
+    // عدّليه حسب Routes في Flutter عندك
+    link: `/expert/bookings/${booking._id}`,
+  });
+} catch (e) {
+  console.error("❌ notify booking failed:", e.message);
+}
+ 
    
-   
-
-
-
-
     // ---------------------------------------------------------
     // 🔟 Final Response
     // ---------------------------------------------------------

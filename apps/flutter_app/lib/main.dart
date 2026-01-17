@@ -45,8 +45,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint("📩 BG Notification: ${message.notification?.title}");
 }
 
-
-
 // ----------------------------------------------------------------------------
 // MAIN
 // ----------------------------------------------------------------------------
@@ -60,18 +58,15 @@ void main() async {
     await Stripe.instance.applySettings();
   }
 
-  // ✅ 2) Firebase (مش مشكلة يشتغل على الويب كمان)
+  // ✅ 2) Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-if (!kIsWeb) {
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-}
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
 
-
-
-  // ✅ 4) تشغيل التطبيق
   runApp(
     MultiProvider(
       providers: [
@@ -95,37 +90,49 @@ class _LostTreasuresAppState extends State<LostTreasuresApp> {
   String? _role;
   bool _isApproved = true;
   bool _hasProfile = true;
-bool _pushInitialized = false;
+  bool _pushInitialized = false;
+  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
+    PushNotifications.configure(onLink: (link) => _handlePushLink(link));
     _checkLoginStatus();
   }
 
-Future<void> _ensurePushInitialized() async {
-  if (_pushInitialized) return;
+  Future<void> _handlePushLink(String link) async {
+    if (link.startsWith("/expert/bookings/")) {
+      final id = link.split("/").last;
+      // TODO: افتحي صفحة تفاصيل الحجز عندك
+      // _navKey.currentState?.push(MaterialPageRoute(builder: (_) => BookingDetailsPage(id: id)));
+      return;
+    }
 
-  // لازم يكون المستخدم عامل Login (JWT محفوظ)
-  final prefs = await SharedPreferences.getInstance();
-  final jwt = prefs.getString('token');
-  if (jwt == null) return;
+    if (link == "/" || link.isEmpty) {
+      _navKey.currentState?.pushNamed('/landing_page');
+      return;
+    }
 
-  try {
-    
-    await PushNotifications.init(); // ✅ هنا التسجيل بالباك + listeners
-    if (!mounted) return;
+    _navKey.currentState?.pushNamed('/landing_page');
+  }
+
+  Future<void> _ensurePushInitialized() async {
+    if (_pushInitialized) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final jwt = prefs.getString('token');
+    if (jwt == null) return;
+
+    try {
+      await PushNotifications.init();
+      if (!mounted) return;
       setState(() => _pushInitialized = true);
 
-    debugPrint("✅ PushNotifications initialized");
-  } catch (e) {
-    debugPrint("❌ Push init failed: $e");
+      debugPrint("✅ PushNotifications initialized");
+    } catch (e) {
+      debugPrint("❌ Push init failed: $e");
+    }
   }
-}
-
-
-
-
 
   // ✅ التحقق من حالة تسجيل الدخول + الموافقة + البروفايل
   Future<void> _checkLoginStatus() async {
@@ -165,9 +172,8 @@ Future<void> _ensurePushInitialized() async {
         _hasProfile = hasProfile;
         _isLoading = false;
       });
-     
-    await _ensurePushInitialized(); 
 
+      await _ensurePushInitialized();
     } else {
       setState(() {
         _isLoggedIn = false;
@@ -183,11 +189,9 @@ Future<void> _ensurePushInitialized() async {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    
-
 
     setState(() {
-       _pushInitialized = false;
+      _pushInitialized = false;
       _isLoggedIn = false;
       _role = null;
       _isApproved = true;
@@ -195,13 +199,11 @@ Future<void> _ensurePushInitialized() async {
     });
   }
 
-  // ✅ تحديد الصفحة الرئيسية بناءً على الدور
+  // ✅ Home logic (UPDATED): Guest يبدأ على Customer Dashboard
   Widget _getHomePage() {
+    // ✅ Guest => Customer Dashboard (بدون صلاحيات)
     if (!_isLoggedIn) {
-      return LandingPage(
-        isLoggedIn: false,
-        onLogout: _logout,
-      );
+      return const CustomerHomePage();
     }
 
     switch (_role) {
@@ -211,25 +213,19 @@ Future<void> _ensurePushInitialized() async {
         } else if (!_isApproved) {
           return const WaitingApprovalPage();
         } else {
-          return LandingPage(
-            isLoggedIn: true,
-            onLogout: _logout,
-            userRole: _role,
-          );
+          // لو حابة expert بعد تسجيل دخول يروح لداشبورده مباشرة:
+          return const ExpertDashboardPage();
         }
+
       case 'CUSTOMER':
-        return LandingPage(
-          isLoggedIn: true,
-          onLogout: _logout,
-          userRole: _role,
-        );
+        // ✅ Customer logged-in => نفس صفحة الداشبورد (رح تصير بصلاحيات كاملة تلقائياً لما token موجود)
+        return const CustomerHomePage();
+
       case 'ADMIN':
         return const AdminDashboardPage();
+
       default:
-        return LandingPage(
-          isLoggedIn: _isLoggedIn,
-          onLogout: _logout,
-        );
+        return const CustomerHomePage();
     }
   }
 
@@ -245,6 +241,7 @@ Future<void> _ensurePushInitialized() async {
     }
 
     return MaterialApp(
+      navigatorKey: _navKey,
       debugShowCheckedModeBanner: false,
       title: 'Lost Treasures',
       theme: ThemeData(
@@ -260,7 +257,14 @@ Future<void> _ensurePushInitialized() async {
               onLoginSuccess: () async {
                 await _checkLoginStatus();
                 await _ensurePushInitialized();
-               
+                // ✅ بعد تسجيل الدخول، رجّعي المستخدم لصفحة الداشبورد (أو أي صفحة حسب role)
+                if (context.mounted) {
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/customer_dashboard_page',
+                    (route) => false,
+                  );
+                }
               },
             ),
         '/signup_page': (context) => const SignupPage(),
