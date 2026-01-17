@@ -288,7 +288,9 @@ class _AdminDisputesPageState extends State<AdminDisputesPage> {
     final all = _countStatus('ALL');
     final open = _countStatus('OPEN');
     final review = _countStatus('UNDER_REVIEW');
+
     final resolved = _countStatus('RESOLVED_CUSTOMER');
+
 
     final cards = [
       _StatCard(
@@ -441,7 +443,8 @@ class _FiltersCard extends StatelessWidget {
       'OPEN',
       'UNDER_REVIEW',
       'RESOLVED_CUSTOMER',
-      
+      'RESOLVED_EXPERT',
+
     ];
 
     return _SurfaceCard(

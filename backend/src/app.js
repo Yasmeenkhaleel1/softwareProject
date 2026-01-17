@@ -5,7 +5,7 @@ import express from "express";
 import path from "path";
 import dotenv from 'dotenv';
 import { fileURLToPath } from "url";
-
+import recommendationRoutes from "./routes/recommendation.route.js";
 // Routers
 import webhookRoute from "./routes/webhook.route.js";
 import disputeRoutes from "./routes/dispute.routes.js";
@@ -130,7 +130,7 @@ app.use("/api/recommendations", recommendationRoutes);
 // 🔹 حجوزات الخبير (Expert Dashboard) ← آخر شيء دائمًا
 app.use("/api", expertBookingRoute);
 
-
+app.use("/api/recommendations", recommendationRoutes);
   console.log("✅ App initialized successfully");
 };
 
